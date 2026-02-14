@@ -1,9 +1,7 @@
 import SwiftUI
 
 enum AppBackgroundMode {
-    case home
-    case list
-    case detail
+    case home, list, detail
 }
 
 struct AppBackground: View {
@@ -13,26 +11,26 @@ struct AppBackground: View {
         self.mode = mode
     }
 
-    private var imageName: String {
-        // Используем тот фон, который у тебя точно есть в Assets
-        return "bg_wave_top"
-    }
+    // Один фон для всех, позже можно сделать разные
+    private var imageName: String { "bg_wave_top" }
+
+    // Высота “шапки”
+    private var topHeight: CGFloat { 260 }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
+            // Нижняя база (чтобы внизу всегда было чисто)
             Color.white
                 .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                Image(imageName)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(height: 240)
-                    .clipped()
-
-                Spacer()
-            }
-            .ignoresSafeArea()
+            // Верхняя волна (не растягиваем на весь экран!)
+            Image(imageName)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: topHeight)
+                .clipped()
+                .ignoresSafeArea(edges: .top)
         }
     }
 }
