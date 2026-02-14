@@ -11,26 +11,32 @@ struct AppBackground: View {
         self.mode = mode
     }
 
-    // Один фон для всех, позже можно сделать разные
+    // Один фон для всех (позже можно сделать разные)
     private var imageName: String { "bg_wave_top" }
 
-    // Высота “шапки”
-    private var topHeight: CGFloat { 260 }
-
     var body: some View {
-        ZStack(alignment: .top) {
-            // Нижняя база (чтобы внизу всегда было чисто)
-            Color.white
-                .ignoresSafeArea()
+        ZStack {
+            // База, чтобы не было “дыр”
+            Color.white.ignoresSafeArea()
 
-            // Верхняя волна (не растягиваем на весь экран!)
+            // Фон на весь экран
             Image(imageName)
                 .resizable()
                 .scaledToFill()
-                .frame(maxWidth: .infinity)
-                .frame(height: topHeight)
-                .clipped()
-                .ignoresSafeArea(edges: .top)
+                .ignoresSafeArea()
+
+            // “Молочная” вуаль: сверху меньше, снизу больше (для читаемости карточек)
+            LinearGradient(
+                stops: [
+                    .init(color: .white.opacity(0.10), location: 0.00),
+                    .init(color: .white.opacity(0.35), location: 0.30),
+                    .init(color: .white.opacity(0.75), location: 0.70),
+                    .init(color: .white.opacity(0.92), location: 1.00),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
         }
     }
 }
