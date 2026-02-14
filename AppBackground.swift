@@ -11,32 +11,23 @@ struct AppBackground: View {
         self.mode = mode
     }
 
-    // Один фон для всех (позже можно сделать разные)
-    private var imageName: String { "bg_wave_top" }
+    private var imageName: String { "bg_wave_top" } // или "bg_wave_top" — оставь то имя, которое реально есть в Assets
 
     var body: some View {
-        ZStack {
-            // База, чтобы не было “дыр”
-            Color.white.ignoresSafeArea()
+        GeometryReader { geo in
+            ZStack {
+                // 1) Базовый фон на весь экран
+                Image(imageName)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
 
-            // Фон на весь экран
-            Image(imageName)
-                .resizable()
-                .scaledToFill()
+
+                    Spacer()
+                }
                 .ignoresSafeArea()
-
-            // “Молочная” вуаль: сверху меньше, снизу больше (для читаемости карточек)
-            LinearGradient(
-                stops: [
-                    .init(color: .white.opacity(0.10), location: 0.00),
-                    .init(color: .white.opacity(0.35), location: 0.30),
-                    .init(color: .white.opacity(0.75), location: 0.70),
-                    .init(color: .white.opacity(0.92), location: 1.00),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            }
         }
     }
-}
+

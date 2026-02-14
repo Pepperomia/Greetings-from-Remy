@@ -1,49 +1,68 @@
 import SwiftUI
 import UIKit
 
-/// ОДНА карточка категории.
-/// ВАЖНО: не объявляй CategoryCardRow больше нигде, иначе снова будет redeclaration.
-struct CategoryCardRow: View {
+struct CategoryCard: View {
     let title: String
     let subtitle: String
     let imageName: String?
+    let imageSize: CGFloat
 
-    /// Единый «визуальный размер» картинок (чтобы все выглядели одинаково крупно)
-    private let imageBox: CGSize = .init(width: 220, height: 140)
+    // ✅ компактность карточки
+    private let vPad: CGFloat = 10
+    private let hPad: CGFloat = 16
+
+    // ✅ прозрачность ТОЛЬКО фона карточки (0.18–0.55 обычно красиво)
+    private let bgOpacity: Double = 0.32
+
+    // ✅ скругление
+    private let radius: CGFloat = 28
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
+
+            // ТЕКСТ слева: занимает всё доступное, но не выталкивает картинку
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.headline)                 // если не меняется — значит не этот файл используется
                     .foregroundStyle(.primary)
+                    .lineLimit(2)
 
                 Text(subtitle)
-                    .font(.system(size: 16, weight: .regular))
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer(minLength: 10)
-
+            // КАРТИНКА справа
             if let imageName, !imageName.isEmpty, UIImage(named: imageName) != nil {
                 Image(imageName)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: imageBox.width, height: imageBox.height)
-                    // Компенсация «пустых полей» у некоторых картинок (чтобы все выглядели одинаково крупно)
-                    .scaleEffect(1.18)
-                    .offset(x: 10, y: 0)
-                    .accessibilityLabel(Text(title))
-            } else {
-                Color.clear
-                    .frame(width: imageBox.width, height: imageBox.height)
+                    .frame(width: imageSize, height: imageSize)
+                    .offset(x: 4, y: -2)
             }
         }
-        .padding(.vertical, 14)     // плашки «поуже по вертикали»
-        .padding(.horizontal, 16)
-        .background(.white.opacity(0.94))
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .shadow(color: .black.opacity(0.06), radius: 18, x: 0, y: 10)
+        .padding(.vertical, vPad)
+        .padding(.horizontal, hPad)
+
+        // ❗️ВАЖНО: НЕТ фиксированной высоты — карточка станет настолько низкой,
+        // насколько позволит комбинация: текст + imageSize + паддинги.
+        // Если хочешь ещё ниже — уменьшаем imageSize или vPad.
+
+        .background(
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(.ultraThinMaterial)
+                // дополнительная “вуаль”, чтобы реально регулировать прозрачность
+                .overlay(
+                    RoundedRectangle(cornerRadius: radius, style: .continuous)
+                        .fill(Color.white.opacity(bgOpacity))
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.05), radius: 14, x: 0, y: 8)
     }
 }

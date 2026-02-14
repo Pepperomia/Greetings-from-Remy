@@ -5,58 +5,101 @@ struct CategoriesView: View {
     @State private var items: [CategoryRow] = []
     @State private var errorText: String?
     @State private var showSearch = false
+    @State private var isSearchExpanded = false
+
+    // Одна точка управления размером картинок
+    private let cardImageSize: CGFloat = 190
 
     var body: some View {
         NavigationStack {
             ZStack {
-                // База: белый низ + верхняя волна (как в AppBackground)
                 AppBackground(.home)
 
-                // Мягкий “подфон” за карточками: размытая волна на весь экран, очень деликатно
-                Image("bg_wave_top")
-                    .resizable()
-                    .scaledToFill()
-                    .ignoresSafeArea()
-                    .blur(radius: 30)
-                    .opacity(0.10)
-
-                // Лёгкая вуаль, но НЕ такая плотная как 0.55 (она убивает фон)
-                Color.white
-                    .opacity(0.72)
-                    .ignoresSafeArea()
-
-                // Контент
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 12) {
+                        // MARK: - Кастомный заголовок
+                        HStack(alignment: .center, spacing: 16) {
+                            Image("mouse_book")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 160)   // было 80 → стало в 2 раза больше
+
+                            Text("Каталог")
+                                .font(.headline.bold())
+
+                            Spacer()
+                        }
+                        .padding(.horizontal)
+                        .padding(.top, 12)
 
                         // Поиск
                         Button { showSearch = true } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "magnifyingglass")
-                                    .foregroundStyle(.secondary)
+                            // ====== Поиск (мышь -> раскрыть поле) ======
+                            HStack(spacing: 12) {
 
-                                Text("Найди рецепт")
-                                    .foregroundStyle(.secondary)
+                                if isSearchExpanded {
+                                    // Поле-плашка (тап -> SearchView)
+                                    Button { showSearch = true } label: {
+                                        HStack(spacing: 10) {
+                                            Image(systemName: "magnifyingglass")
+                                                .foregroundStyle(.secondary)
 
-                                Spacer()
+                                            Text("Найди рецепт")
+                                                .foregroundStyle(.secondary)
 
-                                Image(systemName: "mic.fill")
-                                    .foregroundStyle(.secondary.opacity(0.75))
+                                            Spacer()
+                                        }
+                                        .padding(.vertical, 9)
+                                        .padding(.horizontal, 14)
+                                        .background(.thinMaterial)
+                                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                                .stroke(.white.opacity(0.18), lineWidth: 1)
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    // Кнопка “свернуть”
+                                    Button {
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                                            isSearchExpanded = false
+                                        }
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.title2)
+                                            .foregroundStyle(.secondary.opacity(0.75))
+                                    }
+                                    .buttonStyle(.plain)
+
+                                } else {
+                                    Spacer()
+
+                                    // Мышь справа
+                                    Button {
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                                            isSearchExpanded = true
+                                        }
+                                    } label: {
+                                        Image("mouse_search")
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(width: 74, height: 74)   // ← тут размер мыши
+                                            .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 6)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
                             }
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 14)
-                            .background(.ultraThinMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        }
-                        .padding(.horizontal)
-                        .padding(.top, 10)
+                            .padding(.horizontal)
+                            .padding(.top, 8)
 
                         if let errorText {
                             Text("Ошибка: \(errorText)")
                                 .padding()
                                 .background(.thinMaterial)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 .padding(.horizontal)
+                                .padding(.top, 6)
                         } else {
                             LazyVStack(spacing: 14) {
                                 ForEach(items) { item in
@@ -66,13 +109,15 @@ struct CategoriesView: View {
                                         let meta = cardMeta(for: item.name, count: item.count)
 
                                         CategoryCardRow(
-                                            title: displayTitle(for: item.name),
+                                            title: item.name, // item.name уже нормализован в load()
                                             subtitle: meta.subtitle,
-                                            imageName: meta.imageName
+                                            imageName: meta.imageName,
+                                            imageSize: cardImageSize
                                         )
-                                        .padding(.horizontal)
+                                        .frame(height: cardImageSize + 20)
                                     }
                                     .buttonStyle(.plain)
+                                    .padding(.horizontal)
                                 }
                             }
                             .padding(.top, 6)
@@ -81,28 +126,52 @@ struct CategoriesView: View {
                     }
                 }
             }
-            .navigationTitle("Каталог")
-            .navigationBarTitleDisplayMode(.large)
             .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarBackground(.hidden, for: .tabBar)
             .navigationDestination(isPresented: $showSearch) {
                 SearchView()
             }
             .onAppear { load() }
         }
     }
+    private let categoryOrder: [String] = [
+        "Завтраки", "Салаты", "Супы",
+        "Горячее", "Гарниры",
+        "Выпечка", "Закуски", "Десерты", "Напитки"
+    ]
 
     // MARK: - Data
 
     private func load() {
         do {
             errorText = nil
-            items = try DatabaseManager.shared.fetchCategories()
+            let raw = try DatabaseManager.shared.fetchCategories()
+
+            // 1) нормализуем названия (Горячее/Гарниры)
+            // 2) группируем по нормализованному названию, суммируем count — чтобы не было дублей
+            let grouped = Dictionary(grouping: raw) { displayTitle(for: $0.name) }
+
+            items = grouped.map { key, value in
+                // ВАЖНО: оставляем id первой записи, имя — ключ группы, count суммируем
+                CategoryRow(
+                    id: value.first!.id,
+                    name: key,
+                    count: value.reduce(0) { $0 + $1.count }
+                )
+            }
+            .sorted { a, b in
+                let ia = categoryOrder.firstIndex(of: a.name) ?? 999
+                let ib = categoryOrder.firstIndex(of: b.name) ?? 999
+                return ia < ib
+            }
+
         } catch {
             errorText = error.localizedDescription
             items = []
         }
     }
 
+    /// “Железно” красиво отображаем, не трогая базу
     private func displayTitle(for raw: String) -> String {
         let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if name == "Горячее (основное)" { return "Горячее" }
@@ -115,23 +184,23 @@ struct CategoriesView: View {
 
         switch name {
         case "Завтраки":
-            return ("Быстрый старт дня • \(count) рецептов", "cat_breakfasts")
+            return ("• \(count) рецептов", "cat_breakfasts")
         case "Салаты":
-            return ("Свежие и сытные • \(count) рецептов", "cat_salads")
+            return ("• \(count) рецептов", "cat_salads")
         case "Супы":
-            return ("Тёплые и уютные • \(count) рецептов", "cat_soups")
+            return ("• \(count) рецептов", "cat_soups")
         case "Горячее":
-            return ("Главные блюда • \(count) рецептов", "cat_mains")
+            return ("• \(count) рецептов", "cat_mains")
         case "Гарниры":
-            return ("К любому основному • \(count) рецептов", "cat_sides")
+            return ("• \(count) рецептов", "cat_sides")
         case "Выпечка":
-            return ("Домашняя и ароматная • \(count) рецептов", "cat_bakery")
+            return ("• \(count) рецептов", "cat_bakery")
         case "Закуски":
-            return ("Перекус и стол • \(count) рецептов", "cat_snacks")
+            return ("• \(count) рецептов", "cat_snacks")
         case "Десерты":
-            return ("Сладкое настроение • \(count) рецептов", "cat_desserts")
+            return ("• \(count) рецептов", "cat_desserts")
         case "Напитки":
-            return ("Тёплое и холодное • \(count) рецептов", "cat_drinks")
+            return ("• \(count) рецептов", "cat_drinks")
         default:
             return ("\(count) рецептов", nil)
         }
@@ -143,8 +212,7 @@ struct CategoriesView: View {
         let title: String
         let subtitle: String
         let imageName: String?
-
-        private let imageSize: CGFloat = 170
+        let imageSize: CGFloat
 
         var body: some View {
             HStack(spacing: 14) {
@@ -166,21 +234,25 @@ struct CategoriesView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: imageSize, height: imageSize)
-                        .offset(x: 6, y: -2)
+                        .offset(x: 10, y: -4)
                 } else {
                     Color.clear
                         .frame(width: imageSize, height: imageSize)
                 }
             }
-            .padding(.vertical, 14)
+            // плашка ниже по высоте
+            .padding(.vertical, 10)
             .padding(.horizontal, 16)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .background(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.96) // влияет только на подложку
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(.white.opacity(0.35), lineWidth: 1)
+                    .stroke(.white.opacity(0.20), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.08), radius: 18, x: 0, y: 10)
+            .shadow(color: .black.opacity(0.05), radius: 14, x: 0, y: 8)
         }
     }
 }
