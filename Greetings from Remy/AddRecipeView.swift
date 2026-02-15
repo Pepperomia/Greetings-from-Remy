@@ -161,9 +161,6 @@ struct AddRecipeView: View {
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbarBackground(.hidden, for: .tabBar)
-            .navigationBarHidden(true)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Сохранить") { save() }

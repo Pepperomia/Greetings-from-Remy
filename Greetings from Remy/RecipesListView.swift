@@ -12,81 +12,37 @@ struct RecipesListView: View {
     @State private var filter30 = false
     @State private var surpriseRecipeId: Int? = nil
 
-    // Добавление кухни
     @State private var showAddCuisine = false
 
     var body: some View {
         ZStack {
-            AppBackground(.detail) // если нет режимов — AppBackground()
+            AppBackground(.detail)
 
-            VStack(spacing: 12) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 12) {
 
-                // Фильтры (кухня + добавить + до 30 + удиви меня)
-                VStack(spacing: 10) {
+                    // ФИЛЬТРЫ-МЫШИ (одна линия)
+                    filtersRow
+                        .padding(.top, 6)
 
-                    HStack(spacing: 8) {
-                        Picker("Кухня", selection: Binding(
-                            get: { selectedCuisineId ?? -1 },
-                            set: { selectedCuisineId = ($0 == -1 ? nil : $0) }
-                        )) {
-                            Text("Все кухни").tag(-1)
-                            ForEach(cuisines) { c in
-                                Text(c.name).tag(c.id)
+                    // КАРТОЧКИ РЕЦЕПТОВ
+                    LazyVStack(spacing: 14) {
+                        ForEach(items) { r in
+                            NavigationLink {
+                                RecipeDetailView(recipeId: r.id, title: r.title)
+                            } label: {
+                                RecipeCardRow(
+                                    title: r.title,
+                                    subtitle: "\(r.timeMinutes) мин  •  \(diffLabel(r.difficulty))"
+                                )
                             }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, UI.headerSidePadding)
                         }
-                        .pickerStyle(.menu)
-
-                        Button {
-                            showAddCuisine = true
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.title3)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Добавить кухню")
                     }
-
-                    HStack(spacing: 10) {
-                        Toggle("до 30 мин", isOn: $filter30)
-                            .toggleStyle(.button)
-
-                        Spacer()
-
-                        Button {
-                            surpriseMe()
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image("mouse_clover")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 18, height: 18)
-                                Text("Удиви меня")
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.mint)
-                    }
+                    .padding(.top, 6)
+                    .padding(.bottom, 28)
                 }
-                .padding(.horizontal)
-
-                // Список рецептов
-                List(items) { r in
-                    NavigationLink {
-                        RecipeDetailView(recipeId: r.id, title: r.title)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(r.title)
-                            HStack(spacing: 10) {
-                                Text("\(r.timeMinutes) мин")
-                                Text(diffLabel(r.difficulty))
-                            }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
             }
         }
         .navigationTitle(category.name)
@@ -97,9 +53,7 @@ struct RecipesListView: View {
             RecipeDetailView(recipeId: id, title: "Рецепт")
         }
         .sheet(isPresented: $showAddCuisine) {
-            // Этот sheet мы делали отдельным файлом AddCuisineSheet.swift
             AddCuisineSheet {
-                // после добавления кухни обновим список кухонь
                 loadCuisines()
             }
         }
@@ -114,11 +68,86 @@ struct RecipesListView: View {
                 Text("Ошибка: \(errorText)")
                     .padding()
                     .background(.thinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .padding()
             }
         }
     }
+
+    // MARK: - Filters row (mice)
+
+    private var filtersRow: some View {
+        HStack {
+            // ЛЕВЫЙ БЛОК: watch + world
+            HStack(spacing: 12) {
+
+                // до 30 минут
+                Button {
+                    filter30.toggle()
+                    load()
+                } label: {
+                    MouseSticker("mouse_watch", size: UI.filterMouseSize)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: UI.ringCorner, style: .continuous)
+                                .stroke(.white.opacity(filter30 ? UI.selectedRingOpacity : 0), lineWidth: 2)
+                        )
+                        .scaleEffect(filter30 ? 1.05 : 1.0)
+                        .animation(.spring(response: 0.28, dampingFraction: 0.85), value: filter30)
+                }
+                .buttonStyle(.plain)
+
+                
+
+            // ЦЕНТР: кубик
+            Button {
+                surpriseMe()
+            } label: {
+                MouseSticker("mouse_cube", size: UI.filterMouseSize)
+            }
+            .buttonStyle(.plain)
+
+            Spacer(minLength: 0)
+                
+                // кухни мира (меню)
+                Menu {
+                    Button("Все кухни") {
+                        selectedCuisineId = nil
+                        load()
+                    }
+
+                    ForEach(cuisines) { c in
+                        Button(c.name) {
+                            selectedCuisineId = c.id
+                            load()
+                        }
+                    }
+                } label: {
+                    MouseSticker("mouse_world", size: UI.filterMouseSize)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: UI.ringCorner, style: .continuous)
+                                .stroke(.white.opacity(selectedCuisineId != nil ? UI.selectedRingOpacity : 0), lineWidth: 2)
+                        )
+                        .scaleEffect(selectedCuisineId != nil ? 1.04 : 1.0)
+                        .animation(.spring(response: 0.28, dampingFraction: 0.85), value: selectedCuisineId != nil)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            // ПРАВЫЙ БЛОК: плюс
+            Button {
+                showAddCuisine = true
+            } label: {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.primary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, UI.headerSidePadding)
+    }
+
+    // MARK: - Data
 
     private func resetFilters() {
         selectedCuisineId = nil
@@ -129,12 +158,9 @@ struct RecipesListView: View {
     private func loadCuisines() {
         do {
             errorText = nil
-
-            // ВАЖНО:
-            // fetchCuisines() возвращает только кухни, у которых есть рецепты (по твоей текущей версии DB).
-            // Это идеально для фильтра: не показываем “пустые” кухни.
-            // Плюс мягко скрываем варианты с маленькой буквы, чтобы не было дублей/мусора.
             let all = try DatabaseManager.shared.fetchCuisines()
+
+            // мягко убираем “мусорные” (с маленькой буквы)
             cuisines = all.filter { cuisine in
                 guard let first = cuisine.name.first,
                       let scalar = first.unicodeScalars.first else { return true }
@@ -192,5 +218,69 @@ struct RecipesListView: View {
         case "hard": return "сложно"
         default: return "средне"
         }
+    }
+}
+
+// MARK: - UI helpers
+
+private enum UI {
+    static let filterMouseSize: CGFloat = 85
+    static let headerSidePadding: CGFloat = 16
+
+    static let cardRadius: CGFloat = 22
+    static let cardOpacity: Double = 0.55
+    static let cardVPad: CGFloat = 14
+    static let cardHPad: CGFloat = 16
+
+    static let selectedRingOpacity: Double = 0.35
+    static let ringCorner: CGFloat = 16
+}
+
+private struct MouseSticker: View {
+    let name: String
+    let size: CGFloat
+
+    init(_ name: String, size: CGFloat) {
+        self.name = name
+        self.size = size
+    }
+
+    var body: some View {
+        Image(name)
+            .resizable()
+            .scaledToFill()
+            .frame(width: size, height: size)
+            .clipped()
+            .accessibilityHidden(true)
+    }
+}
+
+private struct RecipeCardRow: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary.opacity(0.8))
+        }
+        .padding(.vertical, UI.cardVPad)
+        .padding(.horizontal, UI.cardHPad)
+        .glassCard(radius: UI.cardRadius, opacity: UI.cardOpacity)
     }
 }
