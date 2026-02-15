@@ -1098,4 +1098,83 @@ final class DatabaseManager {
             }
         }
     }
+    func normalizeCategoriesForUI() throws {
+        try open()
+        try begin()
+        do {
+            // 1) создать/найти канонические категории
+            func ensureCategoryId(_ name: String, sort: Int) throws -> Int {
+                // есть?
+                var sel: OpaquePointer?
+                defer { sqlite3_finalize(sel) }
+                if sqlite3_prepare_v2(db, "SELECT id FROM categories WHERE trim(name)=trim(?) LIMIT 1;", -1, &sel, nil) != SQLITE_OK {
+                    throw NSError(domain: "DB", code: 9101, userInfo: [NSLocalizedDescriptionKey: lastError()])
+                }
+                sqlite3_bind_text(sel, 1, (name as NSString).utf8String, -1, nil)
+                if sqlite3_step(sel) == SQLITE_ROW {
+                    return Int(sqlite3_column_int(sel, 0))
+                }
+
+                // нет -> создаём
+                var ins: OpaquePointer?
+                defer { sqlite3_finalize(ins) }
+                if sqlite3_prepare_v2(db, "INSERT INTO categories(name, sort_order) VALUES (?, ?);", -1, &ins, nil) != SQLITE_OK {
+                    throw NSError(domain: "DB", code: 9102, userInfo: [NSLocalizedDescriptionKey: lastError()])
+                }
+                sqlite3_bind_text(ins, 1, (name as NSString).utf8String, -1, nil)
+                sqlite3_bind_int(ins, 2, Int32(sort))
+                if sqlite3_step(ins) != SQLITE_DONE {
+                    throw NSError(domain: "DB", code: 9103, userInfo: [NSLocalizedDescriptionKey: lastError()])
+                }
+                return Int(sqlite3_last_insert_rowid(db))
+            }
+
+            let hotId = try ensureCategoryId("Горячее", sort: 40)
+            let sidesId = try ensureCategoryId("Гарниры", sort: 50)
+
+            // 2) собрать id дублей
+            func ids(for name: String) throws -> [Int] {
+                var stmt: OpaquePointer?
+                defer { sqlite3_finalize(stmt) }
+                if sqlite3_prepare_v2(db, "SELECT id FROM categories WHERE trim(name)=trim(?);", -1, &stmt, nil) != SQLITE_OK {
+                    throw NSError(domain: "DB", code: 9104, userInfo: [NSLocalizedDescriptionKey: lastError()])
+                }
+                sqlite3_bind_text(stmt, 1, (name as NSString).utf8String, -1, nil)
+
+                var res: [Int] = []
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    res.append(Int(sqlite3_column_int(stmt, 0)))
+                }
+                return res
+            }
+
+            let hotMainIds = try ids(for: "Горячее (основное)")
+            let hotSidesIds = try ids(for: "Горячее (гарниры)")
+
+            // 3) перенос рецептов на канон
+            if !hotMainIds.isEmpty {
+                let list = hotMainIds.map(String.init).joined(separator: ",")
+                try execSQL("UPDATE recipes SET category_id = \(hotId) WHERE category_id IN (\(list));")
+            }
+            if !hotSidesIds.isEmpty {
+                let list = hotSidesIds.map(String.init).joined(separator: ",")
+                try execSQL("UPDATE recipes SET category_id = \(sidesId) WHERE category_id IN (\(list));")
+            }
+
+            // 4) удалить старые категории (теперь они пустые)
+            let toDelete = (hotMainIds + hotSidesIds).filter { $0 != hotId && $0 != sidesId }
+            if !toDelete.isEmpty {
+                let list = toDelete.map(String.init).joined(separator: ",")
+                try execSQL("DELETE FROM categories WHERE id IN (\(list));")
+            }
+
+            // 5) подчистить пробелы
+            try execSQL("UPDATE categories SET name = trim(name);")
+
+            try commit()
+        } catch {
+            rollback()
+            throw error
+        }
+    }
 }

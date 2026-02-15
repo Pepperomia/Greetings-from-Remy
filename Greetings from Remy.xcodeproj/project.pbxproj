@@ -16,6 +16,7 @@
 		D4A7BAEA2F3E4ED200A6D7E9 /* SearchPillButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BAE92F3E4EAE00A6D7E9 /* SearchPillButton.swift */; };
 		D4A7BAEC2F3E4F1000A6D7E9 /* SurpriseCardButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BAEB2F3E4EFB00A6D7E9 /* SurpriseCardButton.swift */; };
 		D4A7BAEE2F3E5ADE00A6D7E9 /* AddCuisineSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BAED2F3E5AC100A6D7E9 /* AddCuisineSheet.swift */; };
+		D4A7BAF22F40D4D100A6D7E9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D4A7BAF12F40D4D100A6D7E9 /* Assets.xcassets */; };
 		D4F1BB822F3A5FD000A4E49C /* libsqlite3.0.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = D4F1BB812F3A5FD000A4E49C /* libsqlite3.0.tbd */; };
 /* End PBXBuildFile section */
 
@@ -46,6 +47,7 @@
 		D4A7BAE92F3E4EAE00A6D7E9 /* SearchPillButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchPillButton.swift; sourceTree = "<group>"; };
 		D4A7BAEB2F3E4EFB00A6D7E9 /* SurpriseCardButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurpriseCardButton.swift; sourceTree = "<group>"; };
 		D4A7BAED2F3E5AC100A6D7E9 /* AddCuisineSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddCuisineSheet.swift; sourceTree = "<group>"; };
+		D4A7BAF12F40D4D100A6D7E9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D4F1BB482F3A5BA200A4E49C /* Greetings from Remy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Greetings from Remy.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D4F1BB552F3A5BA200A4E49C /* Greetings from RemyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Greetings from RemyTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D4F1BB5F2F3A5BA200A4E49C /* Greetings from RemyUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Greetings from RemyUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -128,6 +130,7 @@
 				D4A7BAD72F3BCD9D00A6D7E9 /* GlassCard.swift */,
 				D4A7BAD52F3BCD8A00A6D7E9 /* AppBackground.swift */,
 				D4A7BA8B2F3B389C00A6D7E9 /* FavoritesView.swift */,
+				D4A7BAF12F40D4D100A6D7E9 /* Assets.xcassets */,
 				D4A7BA892F3B375100A6D7E9 /* UserRecipeData.swift */,
 				D4F1BB4A2F3A5BA200A4E49C /* Greetings from Remy */,
 				D4F1BB582F3A5BA200A4E49C /* Greetings from RemyTests */,
@@ -278,6 +281,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D4A7BAF22F40D4D100A6D7E9 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
