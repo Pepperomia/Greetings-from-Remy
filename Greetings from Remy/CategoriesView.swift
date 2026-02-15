@@ -5,10 +5,20 @@ struct CategoriesView: View {
     @State private var items: [CategoryRow] = []
     @State private var errorText: String?
     @State private var showSearch = false
+
+    // Мышь вместо поиска
     @State private var isSearchExpanded = false
 
-    // Одна точка управления размером картинок
-    private let cardImageSize: CGFloat = 190
+    // Размер картинок в карточках категорий (фиксируем)
+    private let cardImageSize: CGFloat = 210
+
+    // Одна точка управления UI
+    private enum UI {
+        static let mouseBookSize: CGFloat = 110      // <-- размер мыши у "Каталог"
+        static let mouseSearchSize: CGFloat = 110    // <-- размер мыши поиска
+        static let headerTopPadding: CGFloat = 10
+        static let headerSidePadding: CGFloat = 16
+    }
 
     var body: some View {
         NavigationStack {
@@ -17,81 +27,8 @@ struct CategoriesView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 12) {
-                        // MARK: - Кастомный заголовок
-                        HStack(alignment: .center, spacing: 16) {
-                            Image("mouse_book")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(height: 160)   // было 80 → стало в 2 раза больше
 
-                            Text("Каталог")
-                                .font(.headline.bold())
-
-                            Spacer()
-                        }
-                        .padding(.horizontal)
-                        .padding(.top, 12)
-
-                        // Поиск
-                        Button { showSearch = true } label: {
-                            // ====== Поиск (мышь -> раскрыть поле) ======
-                            HStack(spacing: 12) {
-
-                                if isSearchExpanded {
-                                    // Поле-плашка (тап -> SearchView)
-                                    Button { showSearch = true } label: {
-                                        HStack(spacing: 10) {
-                                            Image(systemName: "magnifyingglass")
-                                                .foregroundStyle(.secondary)
-
-                                            Text("Найди рецепт")
-                                                .foregroundStyle(.secondary)
-
-                                            Spacer()
-                                        }
-                                        .padding(.vertical, 9)
-                                        .padding(.horizontal, 14)
-                                        .background(.thinMaterial)
-                                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                                .stroke(.white.opacity(0.18), lineWidth: 1)
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-
-                                    // Кнопка “свернуть”
-                                    Button {
-                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
-                                            isSearchExpanded = false
-                                        }
-                                    } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(.title2)
-                                            .foregroundStyle(.secondary.opacity(0.75))
-                                    }
-                                    .buttonStyle(.plain)
-
-                                } else {
-                                    Spacer()
-
-                                    // Мышь справа
-                                    Button {
-                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
-                                            isSearchExpanded = true
-                                        }
-                                    } label: {
-                                        Image("mouse_search")
-                                            .resizable()
-                                            .scaledToFit()
-                                            .frame(width: 74, height: 74)   // ← тут размер мыши
-                                            .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 6)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.horizontal)
-                            .padding(.top, 8)
+                        headerSearchRow
 
                         if let errorText {
                             Text("Ошибка: \(errorText)")
@@ -107,14 +44,12 @@ struct CategoriesView: View {
                                         RecipesListView(category: item)
                                     } label: {
                                         let meta = cardMeta(for: item.name, count: item.count)
-
-                                        CategoryCardRow(
-                                            title: item.name, // item.name уже нормализован в load()
+                                        CategoryCard(
+                                            title: displayTitle(for: item.name),
                                             subtitle: meta.subtitle,
                                             imageName: meta.imageName,
                                             imageSize: cardImageSize
                                         )
-                                        .frame(height: cardImageSize + 20)
                                     }
                                     .buttonStyle(.plain)
                                     .padding(.horizontal)
@@ -126,19 +61,87 @@ struct CategoriesView: View {
                     }
                 }
             }
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbarBackground(.hidden, for: .tabBar)
+            .navigationBarHidden(true)
             .navigationDestination(isPresented: $showSearch) {
                 SearchView()
             }
             .onAppear { load() }
         }
     }
-    private let categoryOrder: [String] = [
-        "Завтраки", "Салаты", "Супы",
-        "Горячее", "Гарниры",
-        "Выпечка", "Закуски", "Десерты", "Напитки"
-    ]
+
+    // MARK: - Header (мышь + поиск)
+
+    private var headerSearchRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+
+            HStack(spacing: 12) {
+                MouseSticker("mouse_book", size: UI.mouseBookSize)
+
+                Text("Каталог")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Spacer()
+            }
+            .padding(.horizontal, UI.headerSidePadding)
+            .padding(.top, UI.headerTopPadding)
+
+            HStack(spacing: 12) {
+                if isSearchExpanded {
+                    Button { showSearch = true } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(.secondary)
+
+                            Text("Найди рецепт")
+                                .foregroundStyle(.secondary)
+
+                            Spacer()
+                        }
+                        .padding(.vertical, 9)
+                        .padding(.horizontal, 14)
+                        .background(.thinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(.white.opacity(0.18), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                            isSearchExpanded = false
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(.secondary.opacity(0.75))
+                    }
+                    .buttonStyle(.plain)
+
+                } else {
+                    Spacer()
+
+                    Button {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                            isSearchExpanded = true
+                        }
+                    } label: {
+                        MouseSticker("mouse_search", size: UI.mouseSearchSize)
+                            .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 6)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, UI.headerSidePadding)
+            .padding(.top, 2)
+        }
+    }
 
     // MARK: - Data
 
@@ -147,23 +150,22 @@ struct CategoriesView: View {
             errorText = nil
             let raw = try DatabaseManager.shared.fetchCategories()
 
-            // 1) нормализуем названия (Горячее/Гарниры)
-            // 2) группируем по нормализованному названию, суммируем count — чтобы не было дублей
+            // Убираем визуальные дубли по отображаемому названию:
+            // берём вариант с максимальным count (чтобы не выбрать "пустой дубль")
             let grouped = Dictionary(grouping: raw) { displayTitle(for: $0.name) }
 
-            items = grouped.map { key, value in
-                // ВАЖНО: оставляем id первой записи, имя — ключ группы, count суммируем
-                CategoryRow(
-                    id: value.first!.id,
-                    name: key,
-                    count: value.reduce(0) { $0 + $1.count }
-                )
+            var deduped: [CategoryRow] = []
+            deduped.reserveCapacity(grouped.count)
+
+            for (key, value) in grouped {
+                if let best = value.max(by: { $0.count < $1.count }) {
+                    // ВАЖНО: не используем ?? 0 — из-за этого часто и вылезает UUID/Int конфликт
+                    deduped.append(CategoryRow(id: best.id, name: key, count: best.count))
+                }
             }
-            .sorted { a, b in
-                let ia = categoryOrder.firstIndex(of: a.name) ?? 999
-                let ib = categoryOrder.firstIndex(of: b.name) ?? 999
-                return ia < ib
-            }
+
+            // порядок: можно поменять на твой кастомный список, если нужно
+            items = deduped.sorted { $0.name < $1.name }
 
         } catch {
             errorText = error.localizedDescription
@@ -171,7 +173,8 @@ struct CategoriesView: View {
         }
     }
 
-    /// “Железно” красиво отображаем, не трогая базу
+    // MARK: - Mapping / UI copy
+
     private func displayTitle(for raw: String) -> String {
         let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if name == "Горячее (основное)" { return "Горячее" }
@@ -184,75 +187,46 @@ struct CategoriesView: View {
 
         switch name {
         case "Завтраки":
-            return ("• \(count) рецептов", "cat_breakfasts")
+            return ("Быстрый старт дня • \(count) рецептов", "cat_breakfasts")
         case "Салаты":
-            return ("• \(count) рецептов", "cat_salads")
+            return ("Свежие и сытные • \(count) рецептов", "cat_salads")
         case "Супы":
-            return ("• \(count) рецептов", "cat_soups")
+            return ("Тёплые и уютные • \(count) рецептов", "cat_soups")
         case "Горячее":
-            return ("• \(count) рецептов", "cat_mains")
+            return ("Главные блюда • \(count) рецептов", "cat_mains")
         case "Гарниры":
-            return ("• \(count) рецептов", "cat_sides")
+            return ("К любому основному • \(count) рецептов", "cat_sides")
         case "Выпечка":
-            return ("• \(count) рецептов", "cat_bakery")
+            return ("Домашняя и ароматная • \(count) рецептов", "cat_bakery")
         case "Закуски":
-            return ("• \(count) рецептов", "cat_snacks")
+            return ("Перекус и стол • \(count) рецептов", "cat_snacks")
         case "Десерты":
-            return ("• \(count) рецептов", "cat_desserts")
+            return ("Сладкое настроение • \(count) рецептов", "cat_desserts")
         case "Напитки":
-            return ("• \(count) рецептов", "cat_drinks")
+            return ("Тёплое и холодное • \(count) рецептов", "cat_drinks")
         default:
             return ("\(count) рецептов", nil)
         }
     }
+}
 
-    // MARK: - UI
+// MARK: - Mouse sticker helper
+// Ключевой момент: scaledToFill + clipped -> “съедает” прозрачные поля PNG и мышь реально становится больше.
+private struct MouseSticker: View {
+    let name: String
+    let size: CGFloat
 
-    private struct CategoryCardRow: View {
-        let title: String
-        let subtitle: String
-        let imageName: String?
-        let imageSize: CGFloat
+    init(_ name: String, size: CGFloat) {
+        self.name = name
+        self.size = size
+    }
 
-        var body: some View {
-            HStack(spacing: 14) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-
-                Spacer(minLength: 8)
-
-                if let imageName, !imageName.isEmpty, UIImage(named: imageName) != nil {
-                    Image(imageName)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: imageSize, height: imageSize)
-                        .offset(x: 10, y: -4)
-                } else {
-                    Color.clear
-                        .frame(width: imageSize, height: imageSize)
-                }
-            }
-            // плашка ниже по высоте
-            .padding(.vertical, 10)
-            .padding(.horizontal, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .opacity(0.96) // влияет только на подложку
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(.white.opacity(0.20), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.05), radius: 14, x: 0, y: 8)
-        }
+    var body: some View {
+        Image(name)
+            .resizable()
+            .scaledToFill()
+            .frame(width: size, height: size)
+            .clipped()
+            .accessibilityHidden(true)
     }
 }
