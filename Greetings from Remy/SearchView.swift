@@ -14,9 +14,16 @@ struct SearchView: View {
     @State private var surpriseRecipeId: Int? = nil
 
     @State private var filter30 = false
-    @State private var onlyEasy = false
-
     @State private var showAddCuisine = false
+
+    // MARK: - UI
+
+    private enum UI {
+        static let mouseSize: CGFloat = 64
+        static let plusSize: CGFloat = 38
+        static let topPad: CGFloat = 12
+        static let sidePad: CGFloat = 16
+    }
 
     var body: some View {
         NavigationStack {
@@ -25,71 +32,15 @@ struct SearchView: View {
 
                 VStack(spacing: 12) {
 
+                    // Поисковая строка
                     TextField("Поиск: борщ, курица, сливки…", text: $query)
                         .textFieldStyle(.roundedBorder)
-                        .padding(.horizontal)
+                        .padding(.horizontal, UI.sidePad)
+                        .padding(.top, UI.topPad)
 
-                    // Категория
-                    Picker("Категория", selection: Binding(
-                        get: { selectedCategoryId ?? -1 },
-                        set: { selectedCategoryId = ($0 == -1 ? nil : $0) }
-                    )) {
-                        Text("Все").tag(-1)
-                        ForEach(categories) { c in
-                            Text(c.name).tag(c.id)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .padding(.horizontal)
-
-                    // Кухня + кнопка добавить
-                    HStack(spacing: 8) {
-                        Picker("Кухня", selection: Binding(
-                            get: { selectedCuisineId ?? -1 },
-                            set: { selectedCuisineId = ($0 == -1 ? nil : $0) }
-                        )) {
-                            Text("Все кухни").tag(-1)
-                            ForEach(cuisines) { c in
-                                Text(c.name).tag(c.id)
-                            }
-                        }
-                        .pickerStyle(.menu)
-
-                        Button {
-                            showAddCuisine = true
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.title3)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.horizontal)
-
-                    // Быстрые фильтры + Удиви меня
-                    HStack(spacing: 10) {
-                        Toggle("до 30 мин", isOn: $filter30)
-                            .toggleStyle(.button)
-
-                        Toggle("легко", isOn: $onlyEasy)
-                            .toggleStyle(.button)
-
-                        Spacer()
-
-                        Button {
-                            surpriseMe()
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image("mouse_clover")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 18, height: 18)
-                                Text("Удиви меня")
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.mint)
-                    }
-                    .padding(.horizontal)
+                    // ✅ Мышиные фильтры
+                    filtersRow
+                        .padding(.horizontal, UI.sidePad)
 
                     // Результаты
                     List(results) { r in
@@ -115,9 +66,15 @@ struct SearchView: View {
             .toolbar {
                 Button("Сброс") { resetFilters() }
             }
-            .navigationDestination(item: $surpriseRecipeId) { id in
-                RecipeDetailView(recipeId: id, title: "Рецепт")
+
+            // ✅ вместо navigationDestination(item:) (Int не Identifiable)
+            .navigationDestination(isPresented: Binding(
+                get: { surpriseRecipeId != nil },
+                set: { if !$0 { surpriseRecipeId = nil } }
+            )) {
+                RecipeDetailView(recipeId: surpriseRecipeId ?? 0, title: "Рецепт")
             }
+
             .onAppear {
                 loadCategories()
                 loadCuisines()
@@ -125,14 +82,13 @@ struct SearchView: View {
             }
             .onChange(of: query) { _, _ in runSearch() }
             .onChange(of: filter30) { _, _ in runSearch() }
-            .onChange(of: onlyEasy) { _, _ in runSearch() }
             .onChange(of: selectedCategoryId) { _, _ in runSearch() }
             .onChange(of: selectedCuisineId) { _, _ in runSearch() }
+
             .sheet(isPresented: $showAddCuisine) {
-                AddCuisineSheet {
-                    loadCuisines()
-                }
+                AddCuisineSheet { loadCuisines() }
             }
+
             .overlay(alignment: .center) {
                 if let errorText {
                     Text(errorText)
@@ -145,10 +101,84 @@ struct SearchView: View {
         }
     }
 
+    // MARK: - Filters row (мыши)
+
+    private var filtersRow: some View {
+        HStack(spacing: 14) {
+
+            // 1) watch
+            Button {
+                filter30.toggle()
+            } label: {
+                MouseSticker("mouse_watch", size: UI.mouseSize)
+                    .opacity(filter30 ? 1.0 : 0.55)
+            }
+            .buttonStyle(.plain)
+
+            // 2) cube
+            Button {
+                surpriseMe()
+            } label: {
+                MouseSticker("mouse_cube", size: UI.mouseSize)
+            }
+            .buttonStyle(.plain)
+
+            // 3) book (категории)
+            Menu {
+                Button("Все") { selectedCategoryId = nil }
+                Divider()
+                ForEach(categories) { c in
+                    Button(c.name) { selectedCategoryId = c.id }
+                }
+            } label: {
+                MouseSticker("mouse_book", size: UI.mouseSize)
+                    .overlay(alignment: .bottomTrailing) { tinyChevron }
+            }
+            .buttonStyle(.plain)
+
+            // 4) world (кухни)
+            Menu {
+                Button("Все кухни") { selectedCuisineId = nil }
+                Divider()
+                ForEach(cuisines) { c in
+                    Button(c.name) { selectedCuisineId = c.id }
+                }
+            } label: {
+                MouseSticker("mouse_world", size: UI.mouseSize)
+                    .overlay(alignment: .bottomTrailing) { tinyChevron }
+            }
+            .buttonStyle(.plain)
+
+            // 5) плюс рядом с world
+            Button {
+                showAddCuisine = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.headline)
+                    .frame(width: UI.plusSize, height: UI.plusSize)
+                    .background(.thinMaterial)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var tinyChevron: some View {
+        Image(systemName: "chevron.down")
+            .font(.caption2.weight(.semibold))
+            .padding(6)
+            .background(.thinMaterial)
+            .clipShape(Circle())
+            .offset(x: 6, y: 6)
+    }
+
+    // MARK: - Data
+
     private func resetFilters() {
         query = ""
         filter30 = false
-        onlyEasy = false
         selectedCategoryId = nil
         selectedCuisineId = nil
         runSearch()
@@ -164,7 +194,7 @@ struct SearchView: View {
                 categoryId: selectedCategoryId,
                 cuisineId: selectedCuisineId,
                 maxMinutes: maxMin,
-                onlyEasy: onlyEasy
+                onlyEasy: false // (4) "легко" удалили, значит всегда false
             )
         } catch {
             errorText = "Ошибка поиска: \(error.localizedDescription)"
@@ -206,7 +236,7 @@ struct SearchView: View {
                 categoryId: selectedCategoryId,
                 cuisineId: selectedCuisineId,
                 maxMinutes: maxMin,
-                onlyEasy: onlyEasy
+                onlyEasy: false
             ) {
                 surpriseRecipeId = id
             } else {
@@ -222,6 +252,27 @@ struct SearchView: View {
         case "easy": return "легко"
         case "hard": return "сложно"
         default: return "средне"
+        }
+    }
+
+    // MARK: - Mouse helper
+
+    private struct MouseSticker: View {
+        let name: String
+        let size: CGFloat
+
+        init(_ name: String, size: CGFloat = 52) {
+            self.name = name
+            self.size = size
+        }
+
+        var body: some View {
+            Image(name)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipped()
+                .accessibilityHidden(true)
         }
     }
 }
