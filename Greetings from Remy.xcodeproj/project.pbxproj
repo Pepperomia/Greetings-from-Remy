@@ -12,13 +12,10 @@
 		D4A7BAD62F3BCD9A00A6D7E9 /* AppBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BAD52F3BCD8A00A6D7E9 /* AppBackground.swift */; };
 		D4A7BAD82F3BCDAE00A6D7E9 /* GlassCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BAD72F3BCD9D00A6D7E9 /* GlassCard.swift */; };
 		D4A7BADD2F3D0E1500A6D7E9 /* EditRecipeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BADC2F3D0E0600A6D7E9 /* EditRecipeView.swift */; };
-		D4A7BAE42F3E4CD800A6D7E9 /* AppButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BAE32F3E4CC900A6D7E9 /* AppButtonStyle.swift */; };
-		D4A7BAE62F3E4CF200A6D7E9 /* AppTextFieldStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BAE52F3E4CF000A6D7E9 /* AppTextFieldStyle.swift */; };
 		D4A7BAE82F3E4E9D00A6D7E9 /* CategoryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BAE72F3E4E8200A6D7E9 /* CategoryCard.swift */; };
 		D4A7BAEA2F3E4ED200A6D7E9 /* SearchPillButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BAE92F3E4EAE00A6D7E9 /* SearchPillButton.swift */; };
 		D4A7BAEC2F3E4F1000A6D7E9 /* SurpriseCardButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BAEB2F3E4EFB00A6D7E9 /* SurpriseCardButton.swift */; };
 		D4A7BAEE2F3E5ADE00A6D7E9 /* AddCuisineSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BAED2F3E5AC100A6D7E9 /* AddCuisineSheet.swift */; };
-		D4A7BAF02F3FA7D000A6D7E9 /* WaveStripBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BAEF2F3FA7A800A6D7E9 /* WaveStripBackground.swift */; };
 		D4F1BB822F3A5FD000A4E49C /* libsqlite3.0.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = D4F1BB812F3A5FD000A4E49C /* libsqlite3.0.tbd */; };
 /* End PBXBuildFile section */
 
@@ -45,13 +42,10 @@
 		D4A7BAD52F3BCD8A00A6D7E9 /* AppBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBackground.swift; sourceTree = "<group>"; };
 		D4A7BAD72F3BCD9D00A6D7E9 /* GlassCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCard.swift; sourceTree = "<group>"; };
 		D4A7BADC2F3D0E0600A6D7E9 /* EditRecipeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditRecipeView.swift; sourceTree = "<group>"; };
-		D4A7BAE32F3E4CC900A6D7E9 /* AppButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppButtonStyle.swift; sourceTree = "<group>"; };
-		D4A7BAE52F3E4CF000A6D7E9 /* AppTextFieldStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTextFieldStyle.swift; sourceTree = "<group>"; };
 		D4A7BAE72F3E4E8200A6D7E9 /* CategoryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryCard.swift; sourceTree = "<group>"; };
 		D4A7BAE92F3E4EAE00A6D7E9 /* SearchPillButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchPillButton.swift; sourceTree = "<group>"; };
 		D4A7BAEB2F3E4EFB00A6D7E9 /* SurpriseCardButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurpriseCardButton.swift; sourceTree = "<group>"; };
 		D4A7BAED2F3E5AC100A6D7E9 /* AddCuisineSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddCuisineSheet.swift; sourceTree = "<group>"; };
-		D4A7BAEF2F3FA7A800A6D7E9 /* WaveStripBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveStripBackground.swift; sourceTree = "<group>"; };
 		D4F1BB482F3A5BA200A4E49C /* Greetings from Remy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Greetings from Remy.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D4F1BB552F3A5BA200A4E49C /* Greetings from RemyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Greetings from RemyTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D4F1BB5F2F3A5BA200A4E49C /* Greetings from RemyUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Greetings from RemyUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -126,13 +120,10 @@
 		D4F1BB3F2F3A5BA200A4E49C = {
 			isa = PBXGroup;
 			children = (
-				D4A7BAEF2F3FA7A800A6D7E9 /* WaveStripBackground.swift */,
 				D4A7BAED2F3E5AC100A6D7E9 /* AddCuisineSheet.swift */,
 				D4A7BAEB2F3E4EFB00A6D7E9 /* SurpriseCardButton.swift */,
 				D4A7BAE92F3E4EAE00A6D7E9 /* SearchPillButton.swift */,
 				D4A7BAE72F3E4E8200A6D7E9 /* CategoryCard.swift */,
-				D4A7BAE52F3E4CF000A6D7E9 /* AppTextFieldStyle.swift */,
-				D4A7BAE32F3E4CC900A6D7E9 /* AppButtonStyle.swift */,
 				D4A7BADC2F3D0E0600A6D7E9 /* EditRecipeView.swift */,
 				D4A7BAD72F3BCD9D00A6D7E9 /* GlassCard.swift */,
 				D4A7BAD52F3BCD8A00A6D7E9 /* AppBackground.swift */,
@@ -316,12 +307,9 @@
 				D4A7BAE82F3E4E9D00A6D7E9 /* CategoryCard.swift in Sources */,
 				D4A7BA8C2F3B38AA00A6D7E9 /* FavoritesView.swift in Sources */,
 				D4A7BA8A2F3B376300A6D7E9 /* UserRecipeData.swift in Sources */,
-				D4A7BAE42F3E4CD800A6D7E9 /* AppButtonStyle.swift in Sources */,
-				D4A7BAF02F3FA7D000A6D7E9 /* WaveStripBackground.swift in Sources */,
 				D4A7BAEA2F3E4ED200A6D7E9 /* SearchPillButton.swift in Sources */,
 				D4A7BAEC2F3E4F1000A6D7E9 /* SurpriseCardButton.swift in Sources */,
 				D4A7BAD62F3BCD9A00A6D7E9 /* AppBackground.swift in Sources */,
-				D4A7BAE62F3E4CF200A6D7E9 /* AppTextFieldStyle.swift in Sources */,
 				D4A7BAD82F3BCDAE00A6D7E9 /* GlassCard.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
