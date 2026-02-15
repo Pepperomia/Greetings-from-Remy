@@ -144,7 +144,18 @@ struct CategoriesView: View {
     }
 
     // MARK: - Data
-
+    private let categoryOrder: [String] = [
+        "Завтраки",
+        "Салаты",
+        "Супы",
+        "Горячее",
+        "Гарниры",
+        "Выпечка",
+        "Закуски",
+        "Десерты",
+        "Напитки"
+    ]
+    
     private func load() {
         do {
             errorText = nil
@@ -165,7 +176,18 @@ struct CategoriesView: View {
             }
 
             // порядок: можно поменять на твой кастомный список, если нужно
-            items = deduped.sorted { $0.name < $1.name }
+            let orderIndex: [String: Int] = Dictionary(
+                uniqueKeysWithValues: categoryOrder.enumerated().map { ($0.element, $0.offset) }
+            )
+
+            items = deduped.sorted { a, b in
+                let ia = orderIndex[a.name] ?? Int.max
+                let ib = orderIndex[b.name] ?? Int.max
+
+                if ia != ib { return ia < ib }
+                // если обе не из списка (или одинаковая позиция) — по алфавиту
+                return a.name.localizedStandardCompare(b.name) == .orderedAscending
+            }
 
         } catch {
             errorText = error.localizedDescription
