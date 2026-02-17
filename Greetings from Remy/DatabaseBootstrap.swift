@@ -1,7 +1,7 @@
 import Foundation
 
 enum DatabaseBootstrap {
-    static let dbFileName = "recipes_app_seed_v1.sqlite"
+    static let dbFileName = "recipes_app_seed_v11.sqlite"
 
     static func appDatabaseURL() -> URL {
         let fm = FileManager.default
@@ -25,7 +25,7 @@ enum DatabaseBootstrap {
             return
         }
 
-        guard let srcURL = Bundle.main.url(forResource: "recipes_app_seed_v1", withExtension: "sqlite") else {
+        guard let srcURL = Bundle.main.url(forResource: "recipes_app_seed_v11", withExtension: "sqlite") else {
             print("❌ DB not found in Bundle. Проверь, что файл добавлен в App target.")
             return
         }

@@ -2,7 +2,7 @@ import SwiftUI
 
 struct RecipeDetailView: View {
     let recipeId: Int
-    let title: String // оставляем для совместимости вызовов, в UI используем detail.title
+    let title: String
 
     @State private var detail: RecipeDetail?
     @State private var ingredients: [IngredientLine] = []
@@ -11,30 +11,27 @@ struct RecipeDetailView: View {
 
     @State private var showEdit = false
 
-    // Comments
     @State private var comments: [RecipeComment] = []
     @State private var newCommentText = ""
     @State private var isSendingComment = false
 
     var body: some View {
         ZStack {
-            AppBackground() // если у тебя есть режимы: AppBackground(.detail)
+            AppBackground()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
 
                     if let detail {
                         header(detail)
-                        Divider().opacity(0.25)
-
+                        
                         ingredientsBlock
-                        Divider().opacity(0.25)
-
+                        
                         instructionsBlock(detail)
-                        Divider().opacity(0.25)
-
+                        
                         commentsBlock
 
+                        // Кнопка "Редактировать" в стеклянном стиле
                         Button {
                             showEdit = true
                         } label: {
@@ -44,10 +41,10 @@ struct RecipeDetailView: View {
                                     .font(.headline)
                             }
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
+                            .padding(.vertical, 14)
+                            .foregroundColor(.primary)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.mint)
+                        .glassCard()
                         .padding(.top, 6)
 
                     } else if let errorText {
@@ -110,35 +107,45 @@ struct RecipeDetailView: View {
     }
 
     private var ingredientsBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Ингредиенты")
                 .font(.headline)
-
-            ForEach(ingredients) { ing in
-                HStack(alignment: .firstTextBaseline) {
-                    Text("•")
-                        .foregroundStyle(.secondary)
-                    Text(ing.name)
-                    Spacer()
-                    Text(ing.amountText)
-                        .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+            
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(ingredients) { ing in
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("•")
+                            .foregroundStyle(.secondary)
+                        Text(ing.name)
+                        Spacer()
+                        Text(ing.amountText)
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.body)
                 }
-                .font(.body)
-                .glassCard()
             }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
         }
+        .glassCard()
     }
 
     private func instructionsBlock(_ d: RecipeDetail) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Приготовление")
                 .font(.headline)
-
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+            
             Text(d.instructions)
                 .font(.body)
                 .textSelection(.enabled)
-                .glassCard()
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
         }
+        .glassCard()
     }
 
     private var commentsBlock: some View {
@@ -150,6 +157,8 @@ struct RecipeDetailView: View {
             VStack(alignment: .leading, spacing: 8) {
                 TextField("Добавь комментарий", text: $newCommentText, axis: .vertical)
                     .lineLimit(2...4)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 12)
 
                 Button {
                     addComment()
@@ -164,6 +173,8 @@ struct RecipeDetailView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(.mint)
                 .disabled(isSendingComment || newCommentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
             }
             .glassCard()
 
@@ -172,6 +183,10 @@ struct RecipeDetailView: View {
                 Text("Пока нет комментариев.")
                     .foregroundStyle(.secondary)
                     .font(.caption)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
             } else {
                 ForEach(comments) { c in
                     VStack(alignment: .leading, spacing: 6) {
@@ -182,6 +197,9 @@ struct RecipeDetailView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .glassCard()
                 }
             }

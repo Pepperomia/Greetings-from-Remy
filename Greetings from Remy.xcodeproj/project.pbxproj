@@ -54,30 +54,9 @@
 		D4F1BB812F3A5FD000A4E49C /* libsqlite3.0.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.0.tbd; path = usr/lib/libsqlite3.0.tbd; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		D4F1BB782F3A5D0600A4E49C /* Exceptions for "Greetings from Remy" folder in "Greetings from RemyTests" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				recipes_app_seed_v1.sqlite,
-			);
-			target = D4F1BB542F3A5BA200A4E49C /* Greetings from RemyTests */;
-		};
-		D4F1BB792F3A5D0600A4E49C /* Exceptions for "Greetings from Remy" folder in "Greetings from RemyUITests" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				recipes_app_seed_v1.sqlite,
-			);
-			target = D4F1BB5E2F3A5BA200A4E49C /* Greetings from RemyUITests */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D4F1BB4A2F3A5BA200A4E49C /* Greetings from Remy */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				D4F1BB782F3A5D0600A4E49C /* Exceptions for "Greetings from Remy" folder in "Greetings from RemyTests" target */,
-				D4F1BB792F3A5D0600A4E49C /* Exceptions for "Greetings from Remy" folder in "Greetings from RemyUITests" target */,
-			);
 			path = "Greetings from Remy";
 			sourceTree = "<group>";
 		};

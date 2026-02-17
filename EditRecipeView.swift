@@ -32,125 +32,249 @@ struct EditRecipeView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppBackground(.detail) // или AppBackground()
+                AppBackground(.detail)
 
-                Form {
-                    Section("Основное") {
-                        TextField("Название", text: $title)
-
-                        Picker("Категория", selection: $selectedCategoryId) {
-                            ForEach(categories) { c in
-                                Text(c.name).tag(c.id)
-                            }
-                        }
-
-                        TextField("Кухня (опционально)", text: $cuisine)
-
-                        Picker("Сложность", selection: $difficulty) {
-                            Text("легко").tag("easy")
-                            Text("средне").tag("medium")
-                            Text("сложно").tag("hard")
-                        }
-                        .pickerStyle(.segmented)
-
-                        TextField("Время (мин)", text: $timeText)
-                            .keyboardType(.numberPad)
-
-                        TextField("Порции (опционально)", text: $servings)
-                    }
-
-                    Section("Ингредиенты") {
-                        Text("Каждая строка: Ингредиент — Количество")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        TextEditor(text: $ingredientsText)
-                            .frame(minHeight: 140)
-                    }
-
-                    Section("Шаги") {
-                        TextEditor(text: $instructions)
-                            .frame(minHeight: 180)
-                    }
-
-                    // --- Комментарии (редактирование прямо тут) ---
-                    Section("Комментарии") {
-                        if let commentsError {
-                            Text("Ошибка: \(commentsError)")
-                                .foregroundStyle(.red)
-                                .font(.caption)
-                        }
-
-                        if comments.isEmpty {
-                            Text("Пока нет комментариев.")
-                                .foregroundStyle(.secondary)
-                                .font(.caption)
-                        } else {
-                            ForEach(comments) { c in
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack {
-                                        Text(c.createdAtText)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-
-                                        Spacer()
-
-                                        Button {
-                                            startEdit(c)
-                                        } label: {
-                                            Image(systemName: "pencil")
-                                        }
-
-                                        Button(role: .destructive) {
-                                            removeComment(c)
-                                        } label: {
-                                            Image(systemName: "trash")
+                ScrollView {
+                    VStack(spacing: 16) {
+                        
+                        // Основное
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Основное")
+                                .font(.headline)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 12)
+                            
+                            VStack(spacing: 16) {
+                                TextField("Название", text: $title)
+                                    .textFieldStyle(.plain)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 8)
+                                    .background(.regularMaterial)
+                                    .cornerRadius(8)
+                                
+                                // ИСПРАВЛЕННЫЙ PICKER - теперь без фона
+                                HStack {
+                                    Text("Категория")
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    Picker("", selection: $selectedCategoryId) {
+                                        ForEach(categories) { c in
+                                            Text(c.name).tag(c.id)
                                         }
                                     }
+                                    .pickerStyle(.menu)
+                                    .tint(.primary)
+                                    .labelsHidden()
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 8)
+                                .background(.regularMaterial)
+                                .cornerRadius(8)
+                                
+                                TextField("Кухня (опционально)", text: $cuisine)
+                                    .textFieldStyle(.plain)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 8)
+                                    .background(.regularMaterial)
+                                    .cornerRadius(8)
+                                
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Сложность")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    
+                                    Picker("Сложность", selection: $difficulty) {
+                                        Text("легко").tag("easy")
+                                        Text("средне").tag("medium")
+                                        Text("сложно").tag("hard")
+                                    }
+                                    .pickerStyle(.segmented)
+                                }
+                                
+                                HStack(spacing: 12) {
+                                    TextField("Время (мин)", text: $timeText)
+                                        .textFieldStyle(.plain)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 8)
+                                        .background(.regularMaterial)
+                                        .cornerRadius(8)
+                                        .keyboardType(.numberPad)
+                                    
+                                    TextField("Порции", text: $servings)
+                                        .textFieldStyle(.plain)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 8)
+                                        .background(.regularMaterial)
+                                        .cornerRadius(8)
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 12)
+                        }
+                        .glassCard()
 
-                                    if editingCommentId == c.id {
-                                        TextField("Комментарий", text: $editingCommentText, axis: .vertical)
-                                            .lineLimit(2...6)
+                        // Ингредиенты
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Ингредиенты")
+                                .font(.headline)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 12)
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Каждая строка: Ингредиент — Количество")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                
+                                TextEditor(text: $ingredientsText)
+                                    .frame(minHeight: 140)
+                                    .padding(4)
+                                    .background(.regularMaterial)
+                                    .cornerRadius(8)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 12)
+                        }
+                        .glassCard()
 
-                                        HStack {
-                                            Button("Отмена") { cancelEdit() }
-                                                .buttonStyle(.bordered)
+                        // Шаги
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Шаги приготовления")
+                                .font(.headline)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 12)
+                            
+                            TextEditor(text: $instructions)
+                                .frame(minHeight: 180)
+                                .padding(4)
+                                .background(.regularMaterial)
+                                .cornerRadius(8)
+                                .padding(.horizontal, 12)
+                                .padding(.bottom, 12)
+                        }
+                        .glassCard()
 
-                                            Spacer()
-
-                                            Button("Сохранить") { saveEdit() }
-                                                .buttonStyle(.borderedProminent)
-                                                .tint(.mint)
-                                                .disabled(editingCommentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        // Комментарии
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Комментарии")
+                                .font(.headline)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 12)
+                            
+                            VStack(alignment: .leading, spacing: 16) {
+                                if let commentsError {
+                                    Text("Ошибка: \(commentsError)")
+                                        .foregroundStyle(.red)
+                                        .font(.caption)
+                                }
+                                
+                                if comments.isEmpty {
+                                    Text("Пока нет комментариев.")
+                                        .foregroundStyle(.secondary)
+                                        .font(.caption)
+                                        .frame(maxWidth: .infinity, alignment: .center)
+                                        .padding(.vertical, 20)
+                                } else {
+                                    ForEach(comments) { c in
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            HStack {
+                                                Text(c.createdAtText)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                                
+                                                Spacer()
+                                                
+                                                HStack(spacing: 12) {
+                                                    Button {
+                                                        startEdit(c)
+                                                    } label: {
+                                                        Image(systemName: "pencil")
+                                                            .foregroundStyle(.secondary)
+                                                    }
+                                                    
+                                                    Button {
+                                                        removeComment(c)
+                                                    } label: {
+                                                        Image(systemName: "trash")
+                                                            .foregroundStyle(.red)
+                                                    }
+                                                }
+                                            }
+                                            
+                                            if editingCommentId == c.id {
+                                                VStack(alignment: .leading, spacing: 8) {
+                                                    TextField("Комментарий", text: $editingCommentText, axis: .vertical)
+                                                        .lineLimit(2...6)
+                                                        .textFieldStyle(.plain)
+                                                        .padding(8)
+                                                        .background(.regularMaterial)
+                                                        .cornerRadius(8)
+                                                    
+                                                    HStack {
+                                                        Button("Отмена") { cancelEdit() }
+                                                            .buttonStyle(.bordered)
+                                                        
+                                                        Spacer()
+                                                        
+                                                        Button("Сохранить") { saveEdit() }
+                                                            .buttonStyle(.borderedProminent)
+                                                            .tint(.mint)
+                                                            .disabled(editingCommentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                                    }
+                                                }
+                                            } else {
+                                                Text(c.text)
+                                                    .font(.body)
+                                            }
                                         }
-                                    } else {
-                                        Text(c.text)
-                                            .font(.body)
+                                        .padding(.vertical, 8)
+                                        
+                                        if c.id != comments.last?.id {
+                                            Divider()
+                                                .background(.secondary.opacity(0.3))
+                                        }
                                     }
                                 }
-                                .padding(.vertical, 6)
                             }
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 12)
                         }
-                    }
+                        .glassCard()
 
-                    // Ошибки/успех
-                    if let errorText {
-                        Section { Text(errorText).foregroundStyle(.red) }
-                    }
-                    if let successText {
-                        Section { Text(successText).foregroundStyle(.green) }
-                    }
+                        // Ошибки/успех
+                        if let errorText {
+                            Text(errorText)
+                                .foregroundStyle(.red)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding()
+                                .glassCard()
+                        }
+                        
+                        if let successText {
+                            Text(successText)
+                                .foregroundStyle(.green)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding()
+                                .glassCard()
+                        }
 
-                    // Удаление (ВАЖНО: внутри Form)
-                    Section {
+                        // Кнопка удаления
                         Button(role: .destructive) {
                             showDeleteConfirm = true
                         } label: {
-                            Text("Удалить рецепт")
+                            HStack {
+                                Image(systemName: "trash")
+                                Text("Удалить рецепт")
+                                    .font(.headline)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .foregroundColor(.red)
                         }
+                        .glassCard()
+                        .padding(.top, 6)
                     }
+                    .padding()
                 }
-                .scrollContentBackground(.hidden)
             }
             .navigationTitle("Редактировать")
             .toolbar {
