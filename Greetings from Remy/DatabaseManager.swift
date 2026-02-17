@@ -329,6 +329,7 @@ final class DatabaseManager {
         }
         return result
     }
+    
     // MARK: - Cuisines: Add + FetchAll
 
     func fetchAllCuisines() throws -> [CuisineRow] {
@@ -1098,6 +1099,7 @@ final class DatabaseManager {
             }
         }
     }
+    
     func normalizeCategoriesForUI() throws {
         try open()
         try begin()
@@ -1176,5 +1178,263 @@ final class DatabaseManager {
             rollback()
             throw error
         }
+    }
+
+    // MARK: - Query Helpers
+
+    private func runQuery<T>(
+        _ sql: String,
+        parameters: [Any] = [],
+        mapRow: (SQLiteRow) -> T
+    ) throws -> [T] {
+        try open()
+        
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+        
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
+            throw NSError(domain: "DB", code: 1000, userInfo: [NSLocalizedDescriptionKey: lastError()])
+        }
+        
+        // Биндим параметры
+        for (idx, param) in parameters.enumerated() {
+            let bindIdx = Int32(idx + 1)
+            
+            if let intParam = param as? Int {
+                sqlite3_bind_int(stmt, bindIdx, Int32(intParam))
+            } else if let stringParam = param as? String {
+                sqlite3_bind_text(stmt, bindIdx, (stringParam as NSString).utf8String, -1, nil)
+            } else if let doubleParam = param as? Double {
+                sqlite3_bind_double(stmt, bindIdx, doubleParam)
+            } else if param is NSNull {
+                sqlite3_bind_null(stmt, bindIdx)
+            }
+        }
+        
+        var results: [T] = []
+        
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let row = SQLiteRow(statement: stmt)
+            results.append(mapRow(row))
+        }
+        
+        return results
+    }
+
+    // MARK: - SQLiteRow Helper
+
+    struct SQLiteRow {
+        private let statement: OpaquePointer?
+        
+        init(statement: OpaquePointer?) {
+            self.statement = statement
+        }
+        
+        subscript(index: Int) -> Any? {
+            let colIdx = Int32(index)
+            let type = sqlite3_column_type(statement, colIdx)
+            
+            switch type {
+            case SQLITE_INTEGER:
+                return Int(sqlite3_column_int(statement, colIdx))
+            case SQLITE_FLOAT:
+                return sqlite3_column_double(statement, colIdx)
+            case SQLITE_TEXT:
+                guard let text = sqlite3_column_text(statement, colIdx) else { return nil }
+                return String(cString: text)
+            case SQLITE_NULL:
+                return nil
+            default:
+                return nil
+            }
+        }
+    }
+}
+
+// MARK: - DatabaseManager Extensions для SearchView
+
+extension DatabaseManager {
+    
+    // Поиск названий ингредиентов по префиксу (для автодополнения)
+    func searchIngredientNames(prefix: String) throws -> [String] {
+        let sql = """
+            SELECT DISTINCT name 
+            FROM ingredients 
+            WHERE name LIKE ? 
+            ORDER BY name 
+            LIMIT 10
+        """
+        
+        let pattern = "\(prefix)%"
+        let resultMap: (SQLiteRow) -> String = { row in
+            return row[0] as? String ?? ""
+        }
+        
+        return try runQuery(sql, parameters: [pattern], mapRow: resultMap)
+            .filter { !$0.isEmpty }
+    }
+    
+    // Получение популярных ингредиентов
+    func getPopularIngredients(limit: Int) throws -> [String] {
+        let sql = """
+            SELECT i.name, COUNT(*) as count
+            FROM ingredients i
+            GROUP BY i.name
+            ORDER BY count DESC, i.name
+            LIMIT ?
+        """
+        
+        let resultMap: (SQLiteRow) -> String = { row in
+            return row[0] as? String ?? ""
+        }
+        
+        return try runQuery(sql, parameters: [limit], mapRow: resultMap)
+            .filter { !$0.isEmpty }
+    }
+    
+    // Обновленный поиск рецептов с учетом нескольких ингредиентов
+    func searchRecipes(
+        query: String,
+        ingredients: [String]? = nil,
+        categoryId: Int? = nil,
+        cuisineId: Int? = nil,
+        maxMinutes: Int? = nil,
+        onlyEasy: Bool = false
+    ) throws -> [RecipeRow] {
+        
+        var sql = """
+            SELECT DISTINCT r.id, r.title, r.time_minutes, r.difficulty
+            FROM recipes r
+            LEFT JOIN recipe_ingredients ri ON r.id = ri.recipe_id
+            LEFT JOIN ingredients i ON ri.ingredient_id = i.id
+            WHERE r.is_archived = 0
+        """
+        
+        var parameters: [Any] = []
+        
+        // Поиск по названию
+        if !query.isEmpty {
+            sql += " AND r.title LIKE ?"
+            parameters.append("%\(query)%")
+        }
+        
+        // Фильтр по ингредиентам (должны быть ВСЕ выбранные)
+        if let ingredients = ingredients, !ingredients.isEmpty {
+            let placeholders = Array(repeating: "?", count: ingredients.count).joined(separator: ",")
+            sql += " AND r.id IN ("
+            sql += "    SELECT recipe_id FROM recipe_ingredients ri2"
+            sql += "    JOIN ingredients i2 ON ri2.ingredient_id = i2.id"
+            sql += "    WHERE i2.name IN (\(placeholders))"
+            sql += "    GROUP BY recipe_id"
+            sql += "    HAVING COUNT(DISTINCT i2.name) = ?"
+            sql += ")"
+            
+            parameters.append(contentsOf: ingredients)
+            parameters.append(ingredients.count)
+        }
+        
+        // Фильтр по категории
+        if let categoryId = categoryId {
+            sql += " AND r.category_id = ?"
+            parameters.append(categoryId)
+        }
+        
+        // Фильтр по кухне
+        if let cuisineId = cuisineId {
+            sql += " AND r.cuisine_id = ?"
+            parameters.append(cuisineId)
+        }
+        
+        // Фильтр по времени
+        if let maxMinutes = maxMinutes {
+            sql += " AND r.time_minutes <= ?"
+            parameters.append(maxMinutes)
+        }
+        
+        // Фильтр "легко"
+        if onlyEasy {
+            sql += " AND r.difficulty = 'easy'"
+        }
+        
+        sql += " ORDER BY r.title LIMIT 100"
+        
+        let resultMap: (SQLiteRow) -> RecipeRow = { row in
+            RecipeRow(
+                id: row[0] as? Int ?? 0,
+                title: row[1] as? String ?? "",
+                timeMinutes: row[2] as? Int ?? 0,
+                difficulty: row[3] as? String ?? "medium"
+            )
+        }
+        
+        return try runQuery(sql, parameters: parameters, mapRow: resultMap)
+    }
+    
+    // Случайный рецепт с фильтрами
+    func randomRecipeId(
+        query: String,
+        ingredients: [String]? = nil,
+        categoryId: Int? = nil,
+        cuisineId: Int? = nil,
+        maxMinutes: Int? = nil,
+        onlyEasy: Bool = false
+    ) throws -> Int? {
+        
+        var sql = """
+            SELECT r.id
+            FROM recipes r
+            LEFT JOIN recipe_ingredients ri ON r.id = ri.recipe_id
+            LEFT JOIN ingredients i ON ri.ingredient_id = i.id
+            WHERE r.is_archived = 0
+        """
+        
+        var parameters: [Any] = []
+        
+        if !query.isEmpty {
+            sql += " AND r.title LIKE ?"
+            parameters.append("%\(query)%")
+        }
+        
+        if let ingredients = ingredients, !ingredients.isEmpty {
+            let placeholders = Array(repeating: "?", count: ingredients.count).joined(separator: ",")
+            sql += " AND r.id IN ("
+            sql += "    SELECT recipe_id FROM recipe_ingredients ri2"
+            sql += "    JOIN ingredients i2 ON ri2.ingredient_id = i2.id"
+            sql += "    WHERE i2.name IN (\(placeholders))"
+            sql += "    GROUP BY recipe_id"
+            sql += "    HAVING COUNT(DISTINCT i2.name) = ?"
+            sql += ")"
+            
+            parameters.append(contentsOf: ingredients)
+            parameters.append(ingredients.count)
+        }
+        
+        if let categoryId = categoryId {
+            sql += " AND r.category_id = ?"
+            parameters.append(categoryId)
+        }
+        
+        if let cuisineId = cuisineId {
+            sql += " AND r.cuisine_id = ?"
+            parameters.append(cuisineId)
+        }
+        
+        if let maxMinutes = maxMinutes {
+            sql += " AND r.time_minutes <= ?"
+            parameters.append(maxMinutes)
+        }
+        
+        if onlyEasy {
+            sql += " AND r.difficulty = 'easy'"
+        }
+        
+        sql += " ORDER BY RANDOM() LIMIT 1"
+        
+        let resultMap: (SQLiteRow) -> Int = { row in
+            return row[0] as? Int ?? 0
+        }
+        
+        let ids = try runQuery(sql, parameters: parameters, mapRow: resultMap)
+        return ids.first
     }
 }

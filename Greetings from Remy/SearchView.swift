@@ -4,6 +4,12 @@ struct SearchView: View {
     @State private var query = ""
     @State private var results: [RecipeRow] = []
     @State private var errorText: String?
+    
+    // Для множественного выбора ингредиентов
+    @State private var selectedIngredients: [String] = []
+    @State private var ingredientInput = ""
+    @State private var showIngredientSuggestions = false
+    @State private var availableIngredients: [String] = []
 
     @State private var categories: [CategoryRow] = []
     @State private var selectedCategoryId: Int? = nil
@@ -30,73 +36,212 @@ struct SearchView: View {
             ZStack {
                 AppBackground()
 
-                VStack(spacing: 12) {
-
-                    // Поисковая строка
-                    TextField("Поиск: борщ, курица, сливки…", text: $query)
-                        .textFieldStyle(.roundedBorder)
-                        .padding(.horizontal, UI.sidePad)
-                        .padding(.top, UI.topPad)
-
-                    // ✅ Мышиные фильтры
-                    filtersRow
-                        .padding(.horizontal, UI.sidePad)
-
-                    // Результаты
-                    List(results) { r in
-                        NavigationLink {
-                            RecipeDetailView(recipeId: r.id, title: r.title)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(r.title)
-                                HStack(spacing: 10) {
-                                    Text("\(r.timeMinutes) мин")
-                                    Text(diffLabel(r.difficulty))
-                                }
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            }
+                ScrollView {
+                    VStack(spacing: 16) {
+                        
+                        // Поисковая строка в стеклянной карточке
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Поиск")
+                                .font(.headline)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 12)
+                            
+                            TextField("борщ, курица, сливки…", text: $query)
+                                .textFieldStyle(.plain)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(.regularMaterial)
+                                .cornerRadius(8)
+                                .padding(.horizontal, 12)
+                                .padding(.bottom, 12)
                         }
+                        .glassCard()
+                        
+                        // Множественный выбор ингредиентов
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Ингредиенты")
+                                .font(.headline)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 12)
+                            
+                            VStack(alignment: .leading, spacing: 12) {
+                                // Выбранные ингредиенты
+                                if !selectedIngredients.isEmpty {
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack {
+                                            ForEach(selectedIngredients, id: \.self) { ingredient in
+                                                HStack(spacing: 4) {
+                                                    Text(ingredient)
+                                                        .font(.subheadline)
+                                                    
+                                                    Button {
+                                                        selectedIngredients.removeAll { $0 == ingredient }
+                                                        runSearch()
+                                                    } label: {
+                                                        Image(systemName: "xmark.circle.fill")
+                                                            .font(.caption)
+                                                            .foregroundStyle(.secondary)
+                                                    }
+                                                }
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 6)
+                                                .background(.regularMaterial)
+                                                .cornerRadius(16)
+                                            }
+                                        }
+                                        .padding(.horizontal, 12)
+                                    }
+                                }
+                                
+                                // Поле ввода ингредиента
+                                HStack {
+                                    TextField("Добавить ингредиент...", text: $ingredientInput)
+                                        .textFieldStyle(.plain)
+                                        .onSubmit {
+                                            addIngredient()
+                                        }
+                                        .onChange(of: ingredientInput) { _, newValue in
+                                            if !newValue.isEmpty {
+                                                showIngredientSuggestions = true
+                                                loadIngredientSuggestions(for: newValue)
+                                            } else {
+                                                showIngredientSuggestions = false
+                                            }
+                                        }
+                                    
+                                    Button {
+                                        addIngredient()
+                                    } label: {
+                                        Image(systemName: "plus.circle.fill")
+                                            .foregroundStyle(.mint)
+                                    }
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(.regularMaterial)
+                                .cornerRadius(8)
+                                .padding(.horizontal, 12)
+                                
+                                // Подсказки ингредиентов
+                                if showIngredientSuggestions && !availableIngredients.isEmpty {
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack {
+                                            ForEach(availableIngredients, id: \.self) { ingredient in
+                                                Button {
+                                                    ingredientInput = ingredient
+                                                    addIngredient()
+                                                } label: {
+                                                    Text(ingredient)
+                                                        .font(.caption)
+                                                        .padding(.horizontal, 12)
+                                                        .padding(.vertical, 6)
+                                                        .background(.regularMaterial)
+                                                        .cornerRadius(12)
+                                                }
+                                            }
+                                        }
+                                        .padding(.horizontal, 12)
+                                    }
+                                    .padding(.bottom, 8)
+                                }
+                            }
+                            .padding(.bottom, 12)
+                        }
+                        .glassCard()
+
+                        // Мышиные фильтры
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Фильтры")
+                                .font(.headline)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 12)
+                            
+                            filtersRow
+                                .padding(.horizontal, 12)
+                                .padding(.bottom, 12)
+                        }
+                        .glassCard()
+
+                        // Результаты
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Результаты (\(results.count))")
+                                .font(.headline)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 12)
+                            
+                            if results.isEmpty {
+                                Text("Ничего не найдено")
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                    .padding(.vertical, 40)
+                                    .padding(.horizontal, 12)
+                            } else {
+                                LazyVStack(spacing: 8) {
+                                    ForEach(results) { r in
+                                        NavigationLink {
+                                            RecipeDetailView(recipeId: r.id, title: r.title)
+                                        } label: {
+                                            HStack {
+                                                VStack(alignment: .leading, spacing: 4) {
+                                                    Text(r.title)
+                                                        .font(.body)
+                                                        .foregroundColor(.primary)
+                                                    
+                                                    HStack(spacing: 10) {
+                                                        Text("\(r.timeMinutes) мин")
+                                                        Text(diffLabel(r.difficulty))
+                                                    }
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                                }
+                                                
+                                                Spacer()
+                                                
+                                                Image(systemName: "chevron.right")
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 10)
+                                            .background(.regularMaterial)
+                                            .cornerRadius(8)
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, 12)
+                            }
+                            
+                            Spacer(minLength: 12)
+                        }
+                        .glassCard()
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
+                    .padding()
                 }
             }
             .navigationTitle("Поиск")
             .toolbar {
-                Button("Сброс") { resetFilters() }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Сброс") { resetFilters() }
+                }
             }
-
-            // ✅ вместо navigationDestination(item:) (Int не Identifiable)
             .navigationDestination(isPresented: Binding(
                 get: { surpriseRecipeId != nil },
                 set: { if !$0 { surpriseRecipeId = nil } }
             )) {
                 RecipeDetailView(recipeId: surpriseRecipeId ?? 0, title: "Рецепт")
             }
-
             .onAppear {
                 loadCategories()
                 loadCuisines()
+                loadAllIngredients()
                 runSearch()
             }
             .onChange(of: query) { _, _ in runSearch() }
             .onChange(of: filter30) { _, _ in runSearch() }
             .onChange(of: selectedCategoryId) { _, _ in runSearch() }
             .onChange(of: selectedCuisineId) { _, _ in runSearch() }
-
             .sheet(isPresented: $showAddCuisine) {
                 AddCuisineSheet { loadCuisines() }
-            }
-
-            .overlay(alignment: .center) {
-                if let errorText {
-                    Text(errorText)
-                        .padding()
-                        .background(.thinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .padding()
-                }
             }
         }
     }
@@ -112,6 +257,11 @@ struct SearchView: View {
             } label: {
                 MouseSticker("mouse_watch", size: UI.mouseSize)
                     .opacity(filter30 ? 1.0 : 0.55)
+                    .background(
+                        Circle()
+                            .fill(.regularMaterial)
+                            .shadow(radius: 2)
+                    )
             }
             .buttonStyle(.plain)
 
@@ -120,18 +270,28 @@ struct SearchView: View {
                 surpriseMe()
             } label: {
                 MouseSticker("mouse_cube", size: UI.mouseSize)
+                    .background(
+                        Circle()
+                            .fill(.regularMaterial)
+                            .shadow(radius: 2)
+                    )
             }
             .buttonStyle(.plain)
 
             // 3) book (категории)
             Menu {
-                Button("Все") { selectedCategoryId = nil }
+                Button("Все категории") { selectedCategoryId = nil }
                 Divider()
                 ForEach(categories) { c in
                     Button(c.name) { selectedCategoryId = c.id }
                 }
             } label: {
                 MouseSticker("mouse_book", size: UI.mouseSize)
+                    .background(
+                        Circle()
+                            .fill(.regularMaterial)
+                            .shadow(radius: 2)
+                    )
                     .overlay(alignment: .bottomTrailing) { tinyChevron }
             }
             .buttonStyle(.plain)
@@ -145,6 +305,11 @@ struct SearchView: View {
                 }
             } label: {
                 MouseSticker("mouse_world", size: UI.mouseSize)
+                    .background(
+                        Circle()
+                            .fill(.regularMaterial)
+                            .shadow(radius: 2)
+                    )
                     .overlay(alignment: .bottomTrailing) { tinyChevron }
             }
             .buttonStyle(.plain)
@@ -156,8 +321,9 @@ struct SearchView: View {
                 Image(systemName: "plus")
                     .font(.headline)
                     .frame(width: UI.plusSize, height: UI.plusSize)
-                    .background(.thinMaterial)
+                    .background(.regularMaterial)
                     .clipShape(Circle())
+                    .shadow(radius: 2)
             }
             .buttonStyle(.plain)
 
@@ -169,9 +335,41 @@ struct SearchView: View {
         Image(systemName: "chevron.down")
             .font(.caption2.weight(.semibold))
             .padding(6)
-            .background(.thinMaterial)
+            .background(.regularMaterial)
             .clipShape(Circle())
             .offset(x: 6, y: 6)
+    }
+
+    // MARK: - Ingredient Management
+
+    private func addIngredient() {
+        let trimmed = ingredientInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty && !selectedIngredients.contains(trimmed) {
+            selectedIngredients.append(trimmed)
+            ingredientInput = ""
+            showIngredientSuggestions = false
+            runSearch()
+        }
+    }
+
+    private func loadIngredientSuggestions(for prefix: String) {
+        do {
+            availableIngredients = try DatabaseManager.shared.searchIngredientNames(prefix: prefix)
+                .filter { !selectedIngredients.contains($0) }
+                .prefix(5)
+                .map { $0 }
+        } catch {
+            availableIngredients = []
+        }
+    }
+
+    private func loadAllIngredients() {
+        do {
+            // Загружаем популярные ингредиенты для подсказок
+            availableIngredients = try DatabaseManager.shared.getPopularIngredients(limit: 10)
+        } catch {
+            print("Ошибка загрузки ингредиентов: \(error)")
+        }
     }
 
     // MARK: - Data
@@ -181,6 +379,8 @@ struct SearchView: View {
         filter30 = false
         selectedCategoryId = nil
         selectedCuisineId = nil
+        selectedIngredients = []
+        ingredientInput = ""
         runSearch()
     }
 
@@ -191,10 +391,11 @@ struct SearchView: View {
 
             results = try DatabaseManager.shared.searchRecipes(
                 query: query,
+                ingredients: selectedIngredients.isEmpty ? nil : selectedIngredients,
                 categoryId: selectedCategoryId,
                 cuisineId: selectedCuisineId,
                 maxMinutes: maxMin,
-                onlyEasy: false // (4) "легко" удалили, значит всегда false
+                onlyEasy: false
             )
         } catch {
             errorText = "Ошибка поиска: \(error.localizedDescription)"
@@ -233,6 +434,7 @@ struct SearchView: View {
 
             if let id = try DatabaseManager.shared.randomRecipeId(
                 query: query,
+                ingredients: selectedIngredients.isEmpty ? nil : selectedIngredients,
                 categoryId: selectedCategoryId,
                 cuisineId: selectedCuisineId,
                 maxMinutes: maxMin,
@@ -271,7 +473,7 @@ struct SearchView: View {
                 .resizable()
                 .scaledToFill()
                 .frame(width: size, height: size)
-                .clipped()
+                .clipShape(Circle())
                 .accessibilityHidden(true)
         }
     }
