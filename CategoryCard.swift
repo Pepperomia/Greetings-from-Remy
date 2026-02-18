@@ -11,25 +11,32 @@ struct CategoryCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
                     .font(.headline)
+                    .lineLimit(2)
                 Text(subtitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.blue.opacity(0.2)) // ← Голубой фон для текста
 
             if let imageName, !imageName.isEmpty {
                 Image(imageName)
                     .resizable()
-                    .scaledToFit()
-                    .frame(width: imageSize, height: imageSize)
-                    .background(Color.red.opacity(0.3)) // ← Красный фон для картинки
-                    .offset(x: 4, y: -2)
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: imageSize - 20, height: imageSize - 20) // ← уменьшили
+                    .clipShape(RoundedRectangle(cornerRadius: 16)) // ← скруглили углы
+                    .offset(x: 8, y: -2)
             }
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
         .padding(.horizontal, 16)
-        .background(Color.green.opacity(0.1)) // ← Зеленый фон для всей карточки
-        .border(Color.black, width: 2) // ← Черная рамка
+        .background(
+            RoundedRectangle(cornerRadius: 28)
+                .fill(.ultraThinMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 28)
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+        )
     }
 }
