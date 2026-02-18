@@ -11,7 +11,7 @@ struct AppBackground: View {
         self.mode = mode
     }
 
-    private var imageName: String { "bg_wave_top" } // или "bg_wave_top" — оставь то имя, которое реально есть в Assets
+    private var imageName: String { "bg_wave_top" }
 
     var body: some View {
         GeometryReader { geo in
@@ -22,12 +22,20 @@ struct AppBackground: View {
                     .scaledToFill()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea()
-
-
-                    Spacer()
-                }
+                
+                // 2) Градиент поверх
+                LinearGradient(
+                    colors: [
+                        Color(.systemBackground).opacity(0.3),
+                        Color(.systemGray6).opacity(0.4)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
                 .ignoresSafeArea()
             }
+            .ignoresSafeArea()
         }
+        .ignoresSafeArea()
     }
-
+}
