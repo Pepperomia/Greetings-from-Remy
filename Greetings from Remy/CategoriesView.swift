@@ -14,7 +14,7 @@ struct CategoriesView: View {
 
     // Одна точка управления UI
     private enum UI {
-        static let mouseBookSize: CGFloat = 100      // размер мыши у "Каталог"
+        static let mouseBookSize: CGFloat = 150      // размер мыши у "Каталог"
         static let mouseSearchSize: CGFloat = 100    // размер мыши поиска
         static let headerTopPadding: CGFloat = 10
         static let headerSidePadding: CGFloat = 20
@@ -59,11 +59,6 @@ struct CategoriesView: View {
             // Заголовок с мышью
             HStack(spacing: 12) {
                 MouseSticker("mouse_book", size: UI.mouseBookSize)
-                    .background(
-                        Circle()
-                            .fill(.regularMaterial)
-                            .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
-                    )
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Каталог")

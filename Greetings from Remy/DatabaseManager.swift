@@ -16,13 +16,55 @@ struct RecipeComment: Identifiable {
 
 final class DatabaseManager {
     static let shared = DatabaseManager()
-    private init() {}
-
     private var db: OpaquePointer?
+    
+    // ✅ ОДИН init, где вызываем создание индексов
+    private init() {
+        try? createAllIndices()
+    }
+    
+    // MARK: - Open DB
+    
+    private func open() throws {
+        if db != nil { return }
+        
+        let url = DatabaseBootstrap.appDatabaseURL()
+        if sqlite3_open(url.path, &db) != SQLITE_OK {
+            let msg = db.flatMap { sqlite3_errmsg($0) }.map { String(cString: $0) } ?? "Unknown sqlite error"
+            sqlite3_close(db)
+            db = nil
+            throw NSError(domain: "DB", code: 1, userInfo: [NSLocalizedDescriptionKey: msg])
+        }
+    }
+    
+    // MARK: - Индексы для ускорения поиска
+    
+    private func createAllIndices() throws {
+        try open()
+        
+        // Индексы для рецептов
+        try execSQL("CREATE INDEX IF NOT EXISTS idx_recipes_title ON recipes(title);")
+        try execSQL("CREATE INDEX IF NOT EXISTS idx_recipes_is_archived ON recipes(is_archived);")
+        try execSQL("CREATE INDEX IF NOT EXISTS idx_recipes_category ON recipes(category_id);")
+        try execSQL("CREATE INDEX IF NOT EXISTS idx_recipes_cuisine ON recipes(cuisine_id);")
+        try execSQL("CREATE INDEX IF NOT EXISTS idx_recipes_time ON recipes(time_minutes);")
+        try execSQL("CREATE INDEX IF NOT EXISTS idx_recipes_difficulty ON recipes(difficulty);")
+        
+        // Индексы для ингредиентов
+        try execSQL("CREATE INDEX IF NOT EXISTS idx_ingredients_name ON ingredients(name);")
+        try execSQL("CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe ON recipe_ingredients(recipe_id);")
+        try execSQL("CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_ingredient ON recipe_ingredients(ingredient_id);")
+        
+        // Индексы для кухонь и категорий
+        try execSQL("CREATE INDEX IF NOT EXISTS idx_cuisines_name ON cuisines(name);")
+        try execSQL("CREATE INDEX IF NOT EXISTS idx_categories_name ON categories(name);")
+        
+        print("✅ Все индексы созданы")
+    }
 
     // MARK: - Open DB
 
-    private func open() throws {
+    private func openDatabase() throws {
         if db != nil { return }
 
         let url = DatabaseBootstrap.appDatabaseURL()

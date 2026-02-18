@@ -21,6 +21,14 @@ struct SearchView: View {
 
     @State private var filter30 = false
     @State private var showAddCuisine = false
+    
+    // Кэш для результатов
+    @State private var searchCache: [String: [RecipeRow]] = [:]
+    // Кэш для категорий и кухонь (чтобы не грузить каждый раз)
+    @State private var cachedCategories: [CategoryRow] = []
+    @State private var cachedCuisines: [CuisineRow] = []
+    
+    @State private var searchWorkItem: DispatchWorkItem?
 
     // MARK: - UI
 
@@ -76,7 +84,7 @@ struct SearchView: View {
                                                     
                                                     Button {
                                                         selectedIngredients.removeAll { $0 == ingredient }
-                                                        runSearch()
+                                                        debounceSearch()
                                                     } label: {
                                                         Image(systemName: "xmark.circle.fill")
                                                             .font(.caption)
@@ -234,12 +242,17 @@ struct SearchView: View {
                 loadCategories()
                 loadCuisines()
                 loadAllIngredients()
-                runSearch()
+                
+                // Загружаем пустой поиск сразу, чтобы БД "прогрелась"
+                DispatchQueue.global(qos: .background).async {
+                    _ = try? DatabaseManager.shared.searchRecipes(query: "", ingredients: nil, categoryId: nil, cuisineId: nil, maxMinutes: nil, onlyEasy: false)
+                }
             }
-            .onChange(of: query) { _, _ in runSearch() }
-            .onChange(of: filter30) { _, _ in runSearch() }
-            .onChange(of: selectedCategoryId) { _, _ in runSearch() }
-            .onChange(of: selectedCuisineId) { _, _ in runSearch() }
+            .onChange(of: query) { _, _ in debounceSearch() }
+            .onChange(of: filter30) { _, _ in debounceSearch() }
+            .onChange(of: selectedCategoryId) { _, _ in debounceSearch() }
+            .onChange(of: selectedCuisineId) { _, _ in debounceSearch() }
+            .onChange(of: selectedIngredients) { _, _ in debounceSearch() }
             .sheet(isPresented: $showAddCuisine) {
                 AddCuisineSheet { loadCuisines() }
             }
@@ -348,7 +361,7 @@ struct SearchView: View {
             selectedIngredients.append(trimmed)
             ingredientInput = ""
             showIngredientSuggestions = false
-            runSearch()
+            debounceSearch()
         }
     }
 
@@ -371,6 +384,17 @@ struct SearchView: View {
             print("Ошибка загрузки ингредиентов: \(error)")
         }
     }
+    
+    private func debounceSearch() {
+        searchWorkItem?.cancel()
+        
+        let workItem = DispatchWorkItem {
+            runSearch()
+        }
+        searchWorkItem = workItem
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
+    }
 
     // MARK: - Data
 
@@ -381,15 +405,24 @@ struct SearchView: View {
         selectedCuisineId = nil
         selectedIngredients = []
         ingredientInput = ""
-        runSearch()
+        debounceSearch()
     }
 
     private func runSearch() {
+        // ИСПРАВЛЕНО: правильное формирование ключа
+        let cacheKey = "\(query)-\(selectedIngredients)-\(selectedCategoryId.map(String.init) ?? "nil")-\(selectedCuisineId.map(String.init) ?? "nil")-\(filter30)"
+        
+        // Если есть в кэше — берём оттуда
+        if let cached = searchCache[cacheKey] {
+            results = cached
+            return
+        }
+        
         do {
             errorText = nil
             let maxMin = filter30 ? 30 : nil
-
-            results = try DatabaseManager.shared.searchRecipes(
+            
+            let searchResults = try DatabaseManager.shared.searchRecipes(
                 query: query,
                 ingredients: selectedIngredients.isEmpty ? nil : selectedIngredients,
                 categoryId: selectedCategoryId,
@@ -397,36 +430,50 @@ struct SearchView: View {
                 maxMinutes: maxMin,
                 onlyEasy: false
             )
+            
+            results = searchResults
+            
+            // Сохраняем в кэш
+            searchCache[cacheKey] = searchResults
+            
         } catch {
             errorText = "Ошибка поиска: \(error.localizedDescription)"
             results = []
         }
     }
 
+    // Загружаем категории и кухни один раз
     private func loadCategories() {
+        guard cachedCategories.isEmpty else {
+            categories = cachedCategories
+            return
+        }
+        
         do {
-            categories = try DatabaseManager.shared.fetchCategories()
+            let fetchedCategories = try DatabaseManager.shared.fetchCategories()
+            categories = fetchedCategories
+            cachedCategories = fetchedCategories
         } catch {
             errorText = "Ошибка категорий: \(error.localizedDescription)"
         }
     }
 
     private func loadCuisines() {
+        guard cachedCuisines.isEmpty else {
+            cuisines = cachedCuisines
+            return
+        }
+        
         do {
             let all = try DatabaseManager.shared.fetchAllCuisines()
-            cuisines = all.filter { $0.name.first.map(isUppercaseFirstLetter) ?? true }
+            let filtered = all.filter { $0.name.first.map(isUppercaseFirstLetter) ?? true }
+            cuisines = filtered
+            cachedCuisines = filtered
         } catch {
             errorText = "Ошибка кухонь: \(error.localizedDescription)"
         }
     }
-
-    private func isUppercaseFirstLetter(_ ch: Character) -> Bool {
-        if let scalar = ch.unicodeScalars.first {
-            return !CharacterSet.lowercaseLetters.contains(scalar)
-        }
-        return true
-    }
-
+    
     private func surpriseMe() {
         do {
             errorText = nil
@@ -455,6 +502,10 @@ struct SearchView: View {
         case "hard": return "сложно"
         default: return "средне"
         }
+    }
+    
+    private func isUppercaseFirstLetter(_ character: Character) -> Bool {
+        return character.isUppercase
     }
 
     // MARK: - Mouse helper
