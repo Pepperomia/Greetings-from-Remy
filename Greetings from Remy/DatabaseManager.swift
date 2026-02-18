@@ -651,7 +651,7 @@ final class DatabaseManager {
         let tailSQL = """
         GROUP BY r.id
         ORDER BY r.title
-        LIMIT 200;
+        LIMIT 50;
         """
 
         let sql = baseSQL + "\n" + whereSQL + "\n" + tailSQL
@@ -1335,6 +1335,7 @@ extension DatabaseManager {
     }
     
     // Обновленный поиск рецептов с учетом нескольких ингредиентов
+    // В DatabaseManager, замени метод searchRecipes на эту версию
     func searchRecipes(
         query: String,
         ingredients: [String]? = nil,
@@ -1344,61 +1345,70 @@ extension DatabaseManager {
         onlyEasy: Bool = false
     ) throws -> [RecipeRow] {
         
+        try open()
+        
         var sql = """
             SELECT DISTINCT r.id, r.title, r.time_minutes, r.difficulty
             FROM recipes r
-            LEFT JOIN recipe_ingredients ri ON r.id = ri.recipe_id
-            LEFT JOIN ingredients i ON ri.ingredient_id = i.id
-            WHERE r.is_archived = 0
         """
         
         var parameters: [Any] = []
+        var joins = ""
+        var whereClauses = ["r.is_archived = 0"]
         
-        // Поиск по названию
-        if !query.isEmpty {
-            sql += " AND r.title LIKE ?"
-            parameters.append("%\(query)%")
-        }
-        
-        // Фильтр по ингредиентам (должны быть ВСЕ выбранные)
+        // Добавляем JOIN только если нужен поиск по ингредиентам
         if let ingredients = ingredients, !ingredients.isEmpty {
+            joins += """
+                JOIN recipe_ingredients ri ON r.id = ri.recipe_id
+                JOIN ingredients i ON ri.ingredient_id = i.id
+            """
+            
             let placeholders = Array(repeating: "?", count: ingredients.count).joined(separator: ",")
-            sql += " AND r.id IN ("
-            sql += "    SELECT recipe_id FROM recipe_ingredients ri2"
-            sql += "    JOIN ingredients i2 ON ri2.ingredient_id = i2.id"
-            sql += "    WHERE i2.name IN (\(placeholders))"
-            sql += "    GROUP BY recipe_id"
-            sql += "    HAVING COUNT(DISTINCT i2.name) = ?"
-            sql += ")"
+            whereClauses.append("""
+                r.id IN (
+                    SELECT recipe_id 
+                    FROM recipe_ingredients ri2
+                    JOIN ingredients i2 ON ri2.ingredient_id = i2.id
+                    WHERE i2.name IN (\(placeholders))
+                    GROUP BY recipe_id
+                    HAVING COUNT(DISTINCT i2.name) = ?
+                )
+            """)
             
             parameters.append(contentsOf: ingredients)
             parameters.append(ingredients.count)
         }
         
-        // Фильтр по категории
+        // Поиск по названию
+        if !query.isEmpty {
+            whereClauses.append("r.title LIKE ?")
+            parameters.append("%\(query)%")
+        }
+        
+        // Фильтры
         if let categoryId = categoryId {
-            sql += " AND r.category_id = ?"
+            whereClauses.append("r.category_id = ?")
             parameters.append(categoryId)
         }
         
-        // Фильтр по кухне
         if let cuisineId = cuisineId {
-            sql += " AND r.cuisine_id = ?"
+            whereClauses.append("r.cuisine_id = ?")
             parameters.append(cuisineId)
         }
         
-        // Фильтр по времени
         if let maxMinutes = maxMinutes {
-            sql += " AND r.time_minutes <= ?"
+            whereClauses.append("r.time_minutes <= ?")
             parameters.append(maxMinutes)
         }
         
-        // Фильтр "легко"
         if onlyEasy {
-            sql += " AND r.difficulty = 'easy'"
+            whereClauses.append("r.difficulty = 'easy'")
         }
         
-        sql += " ORDER BY r.title LIMIT 100"
+        // Собираем запрос
+        sql += joins
+        sql += " WHERE " + whereClauses.joined(separator: " AND ")
+        sql += " GROUP BY r.id ORDER BY r.title LIMIT 50"
         
         let resultMap: (SQLiteRow) -> RecipeRow = { row in
             RecipeRow(

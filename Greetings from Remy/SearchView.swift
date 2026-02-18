@@ -29,6 +29,22 @@ struct SearchView: View {
     @State private var cachedCuisines: [CuisineRow] = []
     
     @State private var searchWorkItem: DispatchWorkItem?
+    
+    @State private var lastSearchTime: Date = Date()
+    private let searchDelay: TimeInterval = 0.5 // увеличим до 0.5 секунды
+
+    private func debounceSearch() {
+        searchWorkItem?.cancel()
+        
+        let workItem = DispatchWorkItem {
+            self.runSearch()
+            self.lastSearchTime = Date()
+        }
+        searchWorkItem = workItem
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + searchDelay, execute: workItem)
+    }
+
 
     // MARK: - UI
 
@@ -243,18 +259,16 @@ struct SearchView: View {
                 loadCuisines()
                 loadAllIngredients()
                 
-                // Загружаем пустой поиск сразу, чтобы БД "прогрелась"
-                DispatchQueue.global(qos: .background).async {
-                    _ = try? DatabaseManager.shared.searchRecipes(query: "", ingredients: nil, categoryId: nil, cuisineId: nil, maxMinutes: nil, onlyEasy: false)
+                // Предзагружаем популярные категории
+                Task {
+                    // Небольшая задержка, чтобы не грузить сразу всё
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    
+                    // Загружаем результаты для пустого поиска
+                    await MainActor.run {
+                        runSearch()
+                    }
                 }
-            }
-            .onChange(of: query) { _, _ in debounceSearch() }
-            .onChange(of: filter30) { _, _ in debounceSearch() }
-            .onChange(of: selectedCategoryId) { _, _ in debounceSearch() }
-            .onChange(of: selectedCuisineId) { _, _ in debounceSearch() }
-            .onChange(of: selectedIngredients) { _, _ in debounceSearch() }
-            .sheet(isPresented: $showAddCuisine) {
-                AddCuisineSheet { loadCuisines() }
             }
         }
     }
@@ -383,17 +397,6 @@ struct SearchView: View {
         } catch {
             print("Ошибка загрузки ингредиентов: \(error)")
         }
-    }
-    
-    private func debounceSearch() {
-        searchWorkItem?.cancel()
-        
-        let workItem = DispatchWorkItem {
-            runSearch()
-        }
-        searchWorkItem = workItem
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
     }
 
     // MARK: - Data
