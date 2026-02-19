@@ -1,0 +1,145 @@
+import SwiftUI
+
+struct MainContentView: View {
+    // MARK: - State
+    
+    @State private var selectedTab = 0
+    @State private var didBootstrap = false
+    @State private var showSplash = true
+    @State private var bootstrapError: String?
+    
+    // MARK: - Body
+    
+    var body: some View {
+        ZStack {
+            if showSplash {
+                splashView
+                    .transition(.opacity.combined(with: .scale))
+                    .zIndex(1)
+            } else {
+                mainContent
+            }
+        }
+        .onAppear(perform: bootstrap)
+    }
+    
+    // MARK: - Main Content
+    
+    private var mainContent: some View {
+        TabView(selection: $selectedTab) {
+            CategoriesView()
+                .tabItem {
+                    Label("Каталог", systemImage: "book.closed")
+                }
+                .tag(0)
+            
+            AddRecipeView()
+                .tabItem {
+                    Label("Добавить", systemImage: "plus.circle")
+                }
+                .tag(1)
+            
+            FavoritesView()
+                .tabItem {
+                    Label("Избранное", systemImage: "heart")
+                }
+                .tag(2)
+        }
+        .tint(.primary)
+        .overlay(alignment: .bottom) {
+            if let error = bootstrapError {
+                bootstrapErrorView(error)
+            }
+        }
+    }
+    
+    // MARK: - Splash View
+    
+    private var splashView: some View {
+        ZStack {
+            AppBackground()
+            
+            VStack(spacing: 20) {
+                Image("mouse_shef")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 150, height: 150)
+                
+                Text("Привет от Реми")
+                    .font(.largeTitle.bold())
+                
+                Text("Кулинарные рецепты")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                
+                if bootstrapError != nil {
+                    ProgressView()
+                        .padding(.top, 20)
+                }
+            }
+        }
+        .ignoresSafeArea()
+    }
+    
+    // MARK: - Bootstrap Error View
+    
+    private func bootstrapErrorView(_ error: String) -> some View {
+        Text(error)
+            .font(.caption)
+            .foregroundStyle(.red)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(.regularMaterial)
+            .clipShape(Capsule())
+            .padding(.bottom, 80)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+    
+    // MARK: - Bootstrap
+    
+    private func bootstrap() {
+        guard !didBootstrap else { return }
+        didBootstrap = true
+        
+        let minimumSplashTime = 1.5
+        let startTime = Date()
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                // Копируем базу из Bundle, если её нет
+                DatabaseBootstrap.ensureDatabaseCopiedFromBundle()
+                // Проверяем статус базы
+                DatabaseBootstrap.checkDatabaseStatus()
+                
+                // Инициализируем начальные данные
+                try DatabaseManager.shared.ensureInitialData()
+                // Проверяем индексы
+                try DatabaseManager.shared.checkDatabaseHealth()
+                
+                print("✅ База данных готова")
+                
+                let elapsedTime = Date().timeIntervalSince(startTime)
+                let remainingTime = max(0, minimumSplashTime - elapsedTime)
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + remainingTime) {
+                    withAnimation(.easeOut(duration: 0.5)) {
+                        showSplash = false
+                    }
+                }
+                
+            } catch {
+                print("❌ Ошибка инициализации БД: \(error)")
+                
+                DispatchQueue.main.async {
+                    bootstrapError = "Не удалось загрузить данные"
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        withAnimation(.easeOut(duration: 0.5)) {
+                            showSplash = false
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,53 +1,59 @@
 import SwiftUI
 
 struct RecipesListView: View {
+    // MARK: - Properties
+    
     let category: CategoryRow
-
+    
+    // MARK: - State
+    
     @State private var items: [RecipeRow] = []
     @State private var errorText: String?
-
+    
     @State private var cuisines: [CuisineRow] = []
     @State private var selectedCuisineId: Int? = nil
-
+    
     @State private var filter30 = false
     @State private var surpriseRecipeId: Int? = nil
-
+    
     @State private var showAddCuisine = false
-
+    @State private var isLoading = false
+    
+    // MARK: - UI Constants
+    
+    private enum UI {
+        static let mouseSize: CGFloat = 140
+        static let headerTopPadding: CGFloat = 10
+        static let headerSidePadding: CGFloat = 16  // Увеличила для отступов
+        
+        static let cardRadius: CGFloat = 22  // Вернула как было
+        static let cardVPad: CGFloat = 14    // Вернула как было
+        static let cardHPad: CGFloat = 16    // Вернула как было
+        
+        static let selectedRingOpacity: Double = 0.35
+        static let ringWidth: CGFloat = 2
+    }
+    
+    // MARK: - Body
+    
     var body: some View {
         ZStack {
-            AppBackground(.detail)
-
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 12) {
-
-                    // ФИЛЬТРЫ-МЫШИ (одна линия)
-                    filtersRow
-                        .padding(.top, 6)
-
-                    // КАРТОЧКИ РЕЦЕПТОВ
-                    LazyVStack(spacing: 14) {
-                        ForEach(items) { r in
-                            NavigationLink {
-                                RecipeDetailView(recipeId: r.id, title: r.title)
-                            } label: {
-                                RecipeCardRow(
-                                    title: r.title,
-                                    subtitle: "\(r.timeMinutes) мин  •  \(diffLabel(r.difficulty))"
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.horizontal, UI.headerSidePadding)
-                        }
-                    }
-                    .padding(.top, 6)
-                    .padding(.bottom, 28)
-                }
-            }
+            AppBackground(.list)
+            
+            content
         }
-        .navigationTitle(category.name)
+        .navigationTitle(category.displayName)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            Button("Сброс") { resetFilters() }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Сброс") {
+                    withAnimation {
+                        resetFilters()
+                    }
+                }
+                .disabled(selectedCuisineId == nil && !filter30)
+                .opacity(selectedCuisineId == nil && !filter30 ? 0.5 : 1)
+            }
         }
         .navigationDestination(item: $surpriseRecipeId) { id in
             RecipeDetailView(recipeId: id, title: "Рецепт")
@@ -59,145 +65,256 @@ struct RecipesListView: View {
         }
         .onAppear {
             loadCuisines()
-            load()
+            loadRecipes()
         }
-        .onChange(of: selectedCuisineId) { _, _ in load() }
-        .onChange(of: filter30) { _, _ in load() }
-        .overlay(alignment: .center) {
-            if let errorText {
-                Text("Ошибка: \(errorText)")
-                    .padding()
-                    .background(.thinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .padding()
+        .onChange(of: selectedCuisineId) { _, _ in loadRecipes() }
+        .onChange(of: filter30) { _, _ in loadRecipes() }
+    }
+    
+    // MARK: - Content
+    
+    @ViewBuilder
+    private var content: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 20) {
+                // Фильтры
+                filtersRow
+                    .padding(.top, UI.headerTopPadding)
+                
+                // Результаты
+                if isLoading {
+                    loadingView
+                } else if let errorText = errorText {
+                    errorView(errorText)
+                } else if items.isEmpty {
+                    emptyView
+                } else {
+                    recipesList
+                }
+            }
+            .padding(.bottom, 28)
+        }
+    }
+    
+    // MARK: - Filters Row
+    
+    private var filtersRow: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    timeFilterButton
+                    cuisineMenuButton
+                    surpriseButton
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, UI.headerSidePadding)
             }
         }
     }
-
-    // MARK: - Filters row (mice)
-
-    private var filtersRow: some View {
-        HStack {
-            // ЛЕВЫЙ БЛОК: watch + world
-            HStack(spacing: 12) {
-
-                // до 30 минут
-                Button {
-                    filter30.toggle()
-                    load()
+    
+    private var timeFilterButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                filter30.toggle()
+            }
+            loadRecipes()
+        } label: {
+            VStack(spacing: 8) {
+                MouseSticker(name: "mouse_watch", size: UI.mouseSize)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(filter30 ? UI.selectedRingOpacity : 0),
+                                    lineWidth: UI.ringWidth)
+                    )
+                
+                Text("до 30 мин")
+                    .font(.caption)
+                    .foregroundStyle(filter30 ? .primary : .secondary)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private var cuisineMenuButton: some View {
+        Menu {
+            Button("Все кухни") {
+                selectedCuisineId = nil
+                loadRecipes()
+            }
+            
+            if !cuisines.isEmpty {
+                Divider()
+                ForEach(cuisines) { cuisine in
+                    Button(cuisine.displayName) {
+                        selectedCuisineId = cuisine.id
+                        loadRecipes()
+                    }
+                }
+            }
+            
+            Divider()
+            
+            Button("➕ Добавить кухню") {
+                showAddCuisine = true
+            }
+        } label: {
+            VStack(spacing: 8) {
+                MouseSticker(name: "mouse_world", size: UI.mouseSize)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(selectedCuisineId != nil ? UI.selectedRingOpacity : 0),
+                                    lineWidth: UI.ringWidth)
+                    )
+                
+                Text(selectedCuisineName)
+                    .font(.caption)
+                    .foregroundStyle(selectedCuisineId != nil ? .primary : .secondary)
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private var surpriseButton: some View {
+        Button {
+            surpriseMe()
+        } label: {
+            VStack(spacing: 8) {
+                MouseSticker(name: "mouse_cube", size: UI.mouseSize)
+                
+                Text("Сюрприз")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+    
+    // MARK: - Recipes List
+    
+    private var recipesList: some View {
+        LazyVStack(spacing: 12) {
+            ForEach(items) { recipe in
+                NavigationLink {
+                    RecipeDetailView(recipeId: recipe.id, title: recipe.title)
                 } label: {
-                    MouseSticker("mouse_watch", size: UI.filterMouseSize)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: UI.ringCorner, style: .continuous)
-                                .stroke(.white.opacity(filter30 ? UI.selectedRingOpacity : 0), lineWidth: 2)
-                        )
-                        .scaleEffect(filter30 ? 1.05 : 1.0)
-                        .animation(.spring(response: 0.28, dampingFraction: 0.85), value: filter30)
+                    RecipeCardRow(
+                        title: recipe.title,
+                        subtitle: "\(recipe.timeMinutes) мин • \(diffLabel(recipe.difficulty))"
+                    )
                 }
                 .buttonStyle(.plain)
-
-                
-
-            // ЦЕНТР: кубик
-            Button {
-                surpriseMe()
-            } label: {
-                MouseSticker("mouse_cube", size: UI.filterMouseSize)
+                .padding(.horizontal, UI.headerSidePadding)  // Отступы для карточек
             }
-            .buttonStyle(.plain)
-
-            Spacer(minLength: 0)
-                
-                // кухни мира (меню)
-                Menu {
-                    Button("Все кухни") {
-                        selectedCuisineId = nil
-                        load()
-                    }
-
-                    ForEach(cuisines) { c in
-                        Button(c.name) {
-                            selectedCuisineId = c.id
-                            load()
-                        }
-                    }
-                } label: {
-                    MouseSticker("mouse_world", size: UI.filterMouseSize)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: UI.ringCorner, style: .continuous)
-                                .stroke(.white.opacity(selectedCuisineId != nil ? UI.selectedRingOpacity : 0), lineWidth: 2)
-                        )
-                        .scaleEffect(selectedCuisineId != nil ? 1.04 : 1.0)
-                        .animation(.spring(response: 0.28, dampingFraction: 0.85), value: selectedCuisineId != nil)
-                }
-            }
-
-            Spacer(minLength: 0)
-
-            // ПРАВЫЙ БЛОК: плюс
-            Button {
-                showAddCuisine = true
-            } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.primary)
-            }
-            .buttonStyle(.plain)
         }
+        .padding(.top, 8)
+    }
+    
+    // MARK: - Helper Views
+    
+    private var loadingView: some View {
+        ProgressView()
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, 40)
+    }
+    
+    private func errorView(_ error: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+            
+            Text("Ошибка: \(error)")
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+        .padding(.horizontal, 20)
+        .glassCard()
         .padding(.horizontal, UI.headerSidePadding)
     }
-
-    // MARK: - Data
-
-    private func resetFilters() {
-        selectedCuisineId = nil
-        filter30 = false
-        load()
+    
+    private var emptyView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "fork.knife")
+                .font(.system(size: 60))
+                .foregroundStyle(.secondary)
+            
+            Text("Нет рецептов")
+                .font(.title2.bold())
+                .foregroundStyle(.primary)
+            
+            Text("В этой категории пока нет рецептов\nс выбранными фильтрами")
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.vertical, 60)
+        .glassCard()
+        .padding(.horizontal, UI.headerSidePadding)
     }
-
+    
+    // MARK: - Computed Properties
+    
+    private var selectedCuisineName: String {
+        guard let id = selectedCuisineId else { return "Кухня" }
+        return cuisines.first(where: { $0.id == id })?.displayName ?? "Кухня"
+    }
+    
+    // MARK: - Data Loading
+    
     private func loadCuisines() {
         do {
             errorText = nil
-            let all = try DatabaseManager.shared.fetchCuisines()
-
-            // мягко убираем “мусорные” (с маленькой буквы)
-            cuisines = all.filter { cuisine in
-                guard let first = cuisine.name.first,
-                      let scalar = first.unicodeScalars.first else { return true }
-                return !CharacterSet.lowercaseLetters.contains(scalar)
-            }
-
+            cuisines = try DatabaseManager.shared.fetchCuisines()
         } catch {
-            errorText = "Ошибка кухонь: \(error.localizedDescription)"
+            print("❌ Ошибка загрузки кухонь: \(error)")
             cuisines = []
         }
     }
-
-    private func load() {
-        do {
-            errorText = nil
-            let maxMin = filter30 ? 30 : nil
-
-            items = try DatabaseManager.shared.searchRecipes(
-                query: "",
-                categoryId: category.id,
-                cuisineId: selectedCuisineId,
-                maxMinutes: maxMin,
-                onlyEasy: false
-            )
-        } catch {
-            errorText = error.localizedDescription
-            items = []
+    
+    private func loadRecipes() {
+        isLoading = true
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let maxMin = filter30 ? 30 : nil
+                
+                let recipes = try DatabaseManager.shared.searchRecipes(
+                    query: "",
+                    ingredients: nil,
+                    categoryId: category.id,
+                    cuisineId: selectedCuisineId,
+                    maxMinutes: maxMin,
+                    onlyEasy: false
+                )
+                
+                DispatchQueue.main.async {
+                    items = recipes
+                    errorText = nil
+                    isLoading = false
+                }
+                
+            } catch {
+                DispatchQueue.main.async {
+                    errorText = error.localizedDescription
+                    items = []
+                    isLoading = false
+                }
+            }
         }
     }
-
+    
     private func surpriseMe() {
         do {
             errorText = nil
             let maxMin = filter30 ? 30 : nil
-
+            
             if let id = try DatabaseManager.shared.randomRecipeId(
                 query: "",
+                ingredients: nil,
                 categoryId: category.id,
                 cuisineId: selectedCuisineId,
                 maxMinutes: maxMin,
@@ -205,13 +322,21 @@ struct RecipesListView: View {
             ) {
                 surpriseRecipeId = id
             } else {
-                errorText = "Ничего не найдено под эти фильтры 🙃"
+                errorText = "Ничего не найдено 🙃"
             }
         } catch {
             errorText = error.localizedDescription
         }
     }
-
+    
+    private func resetFilters() {
+        selectedCuisineId = nil
+        filter30 = false
+        loadRecipes()
+    }
+    
+    // MARK: - Helpers
+    
     private func diffLabel(_ diff: String) -> String {
         switch diff {
         case "easy": return "легко"
@@ -221,44 +346,18 @@ struct RecipesListView: View {
     }
 }
 
-// MARK: - UI helpers
-
-private enum UI {
-    static let filterMouseSize: CGFloat = 85
-    static let headerSidePadding: CGFloat = 16
-
-    static let cardRadius: CGFloat = 22
-    static let cardOpacity: Double = 0.55
-    static let cardVPad: CGFloat = 14
-    static let cardHPad: CGFloat = 16
-
-    static let selectedRingOpacity: Double = 0.35
-    static let ringCorner: CGFloat = 16
-}
-
-private struct MouseSticker: View {
-    let name: String
-    let size: CGFloat
-
-    init(_ name: String, size: CGFloat) {
-        self.name = name
-        self.size = size
-    }
-
-    var body: some View {
-        Image(name)
-            .resizable()
-            .scaledToFill()
-            .frame(width: size, height: size)
-            .clipped()
-            .accessibilityHidden(true)
-    }
-}
+// MARK: - Recipe Card Row
 
 private struct RecipeCardRow: View {
     let title: String
     let subtitle: String
-
+    
+    @State private var isPressed = false
+    
+    private let cardRadius: CGFloat = 22
+    private let cardVPad: CGFloat = 14
+    private let cardHPad: CGFloat = 16
+    
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
@@ -266,21 +365,58 @@ private struct RecipeCardRow: View {
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .lineLimit(2)
-
+                
                 Text(subtitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-
+            
             Spacer()
-
+            
             Image(systemName: "chevron.right")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary.opacity(0.8))
+                .foregroundStyle(.secondary)
+                .offset(x: isPressed ? 5 : 0)
         }
-        .padding(.vertical, UI.cardVPad)
-        .padding(.horizontal, UI.cardHPad)
-        .glassCard(radius: UI.cardRadius, opacity: UI.cardOpacity)
+        .padding(.vertical, cardVPad)
+        .padding(.horizontal, cardHPad)
+        .glassCard(radius: cardRadius)
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .onTapGesture {
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
+                isPressed = true
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
+                    isPressed = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Mouse Sticker
+
+private struct MouseSticker: View {
+    let name: String
+    let size: CGFloat
+    
+    var body: some View {
+        Image(name)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Preview
+
+#Preview {
+    NavigationStack {
+        RecipesListView(category: CategoryRow.preview)
     }
 }

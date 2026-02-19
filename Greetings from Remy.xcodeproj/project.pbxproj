@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D4A7BA8A2F3B376300A6D7E9 /* UserRecipeData.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BA892F3B375100A6D7E9 /* UserRecipeData.swift */; };
+		D43A1D4D2F4723AD00CE0876 /* MainContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D43A1D4C2F4723A100CE0876 /* MainContentView.swift */; };
 		D4A7BA8C2F3B38AA00A6D7E9 /* FavoritesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BA8B2F3B389C00A6D7E9 /* FavoritesView.swift */; };
 		D4A7BAD62F3BCD9A00A6D7E9 /* AppBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BAD52F3BCD8A00A6D7E9 /* AppBackground.swift */; };
 		D4A7BAD82F3BCDAE00A6D7E9 /* GlassCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A7BAD72F3BCD9D00A6D7E9 /* GlassCard.swift */; };
@@ -38,7 +38,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		D4A7BA892F3B375100A6D7E9 /* UserRecipeData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserRecipeData.swift; sourceTree = "<group>"; };
+		D43A1D4C2F4723A100CE0876 /* MainContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainContentView.swift; sourceTree = "<group>"; };
 		D4A7BA8B2F3B389C00A6D7E9 /* FavoritesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesView.swift; sourceTree = "<group>"; };
 		D4A7BAD52F3BCD8A00A6D7E9 /* AppBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBackground.swift; sourceTree = "<group>"; };
 		D4A7BAD72F3BCD9D00A6D7E9 /* GlassCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCard.swift; sourceTree = "<group>"; };
@@ -101,6 +101,7 @@
 		D4F1BB3F2F3A5BA200A4E49C = {
 			isa = PBXGroup;
 			children = (
+				D43A1D4C2F4723A100CE0876 /* MainContentView.swift */,
 				D4A7BAED2F3E5AC100A6D7E9 /* AddCuisineSheet.swift */,
 				D4A7BAEB2F3E4EFB00A6D7E9 /* SurpriseCardButton.swift */,
 				D4A7BAE92F3E4EAE00A6D7E9 /* SearchPillButton.swift */,
@@ -110,7 +111,6 @@
 				D4A7BAD52F3BCD8A00A6D7E9 /* AppBackground.swift */,
 				D4A7BA8B2F3B389C00A6D7E9 /* FavoritesView.swift */,
 				D4A7BAF12F40D4D100A6D7E9 /* Assets.xcassets */,
-				D4A7BA892F3B375100A6D7E9 /* UserRecipeData.swift */,
 				D4F1BB4A2F3A5BA200A4E49C /* Greetings from Remy */,
 				D4F1BB582F3A5BA200A4E49C /* Greetings from RemyTests */,
 				D4F1BB622F3A5BA200A4E49C /* Greetings from RemyUITests */,
@@ -289,11 +289,11 @@
 				D4A7BAEE2F3E5ADE00A6D7E9 /* AddCuisineSheet.swift in Sources */,
 				D4A7BAE82F3E4E9D00A6D7E9 /* CategoryCard.swift in Sources */,
 				D4A7BA8C2F3B38AA00A6D7E9 /* FavoritesView.swift in Sources */,
-				D4A7BA8A2F3B376300A6D7E9 /* UserRecipeData.swift in Sources */,
 				D4A7BAEA2F3E4ED200A6D7E9 /* SearchPillButton.swift in Sources */,
 				D4A7BAEC2F3E4F1000A6D7E9 /* SurpriseCardButton.swift in Sources */,
 				D4A7BAD62F3BCD9A00A6D7E9 /* AppBackground.swift in Sources */,
 				D4A7BAD82F3BCDAE00A6D7E9 /* GlassCard.swift in Sources */,
+				D43A1D4D2F4723AD00CE0876 /* MainContentView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

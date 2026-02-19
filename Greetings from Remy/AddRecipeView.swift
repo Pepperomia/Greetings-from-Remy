@@ -1,95 +1,69 @@
 import SwiftUI
 
 struct AddRecipeView: View {
+    // MARK: - Environment
+    
     @Environment(\.dismiss) private var dismiss
-
-    // Data
+    
+    // MARK: - Data
+    
     @State private var categories: [CategoryRow] = []
     @State private var cuisines: [CuisineRow] = []
     @State private var selectedCategoryId: Int = -1
     @State private var selectedCuisineId: Int? = nil
-
-    // Fields
+    
+    // MARK: - Fields
+    
     @State private var title = ""
     @State private var timeText = ""
     @State private var servings = ""
     @State private var difficulty = "medium"
     @State private var ingredientsText = ""
     @State private var instructions = ""
-
-    // UI
+    
+    // MARK: - UI State
+    
     @State private var errorText: String?
     @State private var successText: String?
     @State private var showAddCuisine = false
-
-    private enum UI {
-        static let headerMouseSize: CGFloat = 110
-        static let headerSidePadding: CGFloat = 16
+    @State private var isSaving = false
+    
+    // MARK: - Constants
+    
+    private enum Constants {
+        static let headerMouseSize: CGFloat = 100
+        static let headerSidePadding: CGFloat = 20
         static let headerTopPadding: CGFloat = 10
-
-        static let glassCorner: CGFloat = 18
+        
+        static let glassCorner: CGFloat = 16
         static let glassStrokeOpacity: Double = 0.18
-        static let glassVPad: CGFloat = 10
-        static let glassHPad: CGFloat = 14
+        static let glassVPad: CGFloat = 12
+        static let glassHPad: CGFloat = 16
     }
-
+    
+    // MARK: - Body
+    
     var body: some View {
         NavigationStack {
             ZStack {
-                AppBackground()
-
-                VStack(spacing: 10) {
-                    headerRow
-
-                    Form {
-                        Section("Основное") {
-                            TextField("Название", text: $title)
-
-                            // Категория (как было)
-                            Picker("Категория", selection: $selectedCategoryId) {
-                                ForEach(categories) { c in
-                                    Text(c.name).tag(c.id)
-                                }
-                            }
-
-                            // ✅ КУХНИ МИРА: стеклянная плашка + выпадающий список
-                            cuisineGlassMenuRow
-
-                            Picker("Сложность", selection: $difficulty) {
-                                Text("легко").tag("easy")
-                                Text("средне").tag("medium")
-                                Text("сложно").tag("hard")
-                            }
-                            .pickerStyle(.segmented)
-
-                            TextField("Время (мин)", text: $timeText)
-                                .keyboardType(.numberPad)
-
-                            TextField("Порции (опционально)", text: $servings)
+                AppBackground(.list)
+                
+                ScrollView {
+                    VStack(spacing: 16) {
+                        headerRow
+                        
+                        if let errorText = errorText {
+                            errorView(errorText)
                         }
-
-                        Section("Ингредиенты") {
-                            Text("Каждая строка: Ингредиент — Количество")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-
-                            TextEditor(text: $ingredientsText)
-                                .frame(minHeight: 120)
+                        
+                        if let successText = successText {
+                            successView(successText)
                         }
-
-                        Section("Шаги") {
-                            TextEditor(text: $instructions)
-                                .frame(minHeight: 160)
-                        }
-
-                        if let errorText {
-                            Section { Text(errorText).foregroundStyle(.red) }
-                        }
-                        if let successText {
-                            Section { Text(successText).foregroundStyle(.green) }
-                        }
+                        
+                        mainCard
                     }
-                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, Constants.headerSidePadding)
+                    .padding(.bottom, 20)
                 }
             }
             .navigationTitle("")
@@ -97,7 +71,7 @@ struct AddRecipeView: View {
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Сохранить") { save() }
+                    saveButton
                 }
             }
             .sheet(isPresented: $showAddCuisine) {
@@ -111,67 +85,271 @@ struct AddRecipeView: View {
             }
         }
     }
-
-    // MARK: - Header (mouse_pen + “Добавить” как в каталоге)
-
+    
+    // MARK: - Header
+    
     private var headerRow: some View {
-        HStack(spacing: 12) {
-            MouseSticker("mouse_pen", size: UI.headerMouseSize)
-
-            Text("Добавить")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.primary)
-
+        HStack(spacing: 16) {
+            MouseSticker(name: "mouse_pen", size: Constants.headerMouseSize)
+                .background(
+                    Circle()
+                        .fill(.regularMaterial)
+                        .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+                )
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Добавить")
+                    .font(.title.bold())
+                    .foregroundStyle(.primary)
+                
+                Text("новый рецепт")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            
             Spacer()
         }
-        .padding(.horizontal, UI.headerSidePadding)
-        .padding(.top, UI.headerTopPadding)
+        .padding(.horizontal, Constants.headerSidePadding)
+        .padding(.top, Constants.headerTopPadding)
     }
-
-    // MARK: - Cuisine glass row (Menu)
-
-    private var cuisineGlassMenuRow: some View {
+    
+    // MARK: - Main Card
+    
+    private var mainCard: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            // Основное
+            VStack(alignment: .leading, spacing: 16) {
+                sectionHeader("Основное")
+                
+                VStack(spacing: 16) {
+                    // Название
+                    TextField("Название рецепта", text: $title)
+                        .textFieldStyle(.plain)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(.regularMaterial)
+                        .cornerRadius(8)
+                    
+                    // Категория
+                    categoryPicker
+                    
+                    // Кухня
+                    cuisinePicker
+                    
+                    // Сложность
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Сложность")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        
+                        Picker("Сложность", selection: $difficulty) {
+                            Text("легко").tag("easy")
+                            Text("средне").tag("medium")
+                            Text("сложно").tag("hard")
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    
+                    // Время и порции
+                    HStack(spacing: 12) {
+                        TextField("Время (мин)", text: $timeText)
+                            .textFieldStyle(.plain)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(.regularMaterial)
+                            .cornerRadius(8)
+                            .keyboardType(.numberPad)
+                        
+                        TextField("Порции", text: $servings)
+                            .textFieldStyle(.plain)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(.regularMaterial)
+                            .cornerRadius(8)
+                    }
+                }
+            }
+            
+            Divider()
+                .background(.secondary.opacity(0.3))
+            
+            // Ингредиенты
+            VStack(alignment: .leading, spacing: 16) {
+                sectionHeader("Ингредиенты")
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Каждая строка: Ингредиент — Количество")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    
+                    TextEditor(text: $ingredientsText)
+                        .frame(minHeight: 120)
+                        .padding(4)
+                        .background(.regularMaterial)
+                        .cornerRadius(8)
+                }
+            }
+            
+            Divider()
+                .background(.secondary.opacity(0.3))
+            
+            // Шаги
+            VStack(alignment: .leading, spacing: 16) {
+                sectionHeader("Шаги приготовления")
+                
+                TextEditor(text: $instructions)
+                    .frame(minHeight: 160)
+                    .padding(4)
+                    .background(.regularMaterial)
+                    .cornerRadius(8)
+            }
+        }
+        .padding(20)
+        .glassCard()
+    }
+    
+    // MARK: - Pickers
+    
+    private var categoryPicker: some View {
         Menu {
-            Button("Не выбрано") { selectedCuisineId = nil }
-
-            ForEach(cuisines) { cu in
-                Button(cu.name) { selectedCuisineId = cu.id }
+            ForEach(categories) { category in
+                Button(category.name) {
+                    selectedCategoryId = category.id
+                }
             }
-
         } label: {
-            HStack(spacing: 10) {
-                Text("Кухни мира")
+            HStack {
+                Text("Категория")
                     .foregroundStyle(.primary)
-
+                
                 Spacer()
-
-                Text(selectedCuisineTitle)
+                
+                Text(selectedCategoryName)
                     .foregroundStyle(.secondary)
-
+                
                 Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption.weight(.semibold))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            .padding(.vertical, UI.glassVPad)
-            .padding(.horizontal, UI.glassHPad)
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: UI.glassCorner, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: UI.glassCorner, style: .continuous)
-                    .stroke(.white.opacity(UI.glassStrokeOpacity), lineWidth: 1)
-            )
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(.regularMaterial)
+            .cornerRadius(8)
         }
         .buttonStyle(.plain)
-        .contentShape(Rectangle())
     }
-
-    private var selectedCuisineTitle: String {
+    
+    private var cuisinePicker: some View {
+        HStack {
+            Menu {
+                Button("Не выбрано") { selectedCuisineId = nil }
+                Divider()
+                ForEach(cuisines) { cuisine in
+                    Button(cuisine.name) { selectedCuisineId = cuisine.id }
+                }
+                Divider()
+                Button("➕ Добавить кухню") {
+                    showAddCuisine = true
+                }
+            } label: {
+                HStack {
+                    Text("Кухня мира")
+                        .foregroundStyle(.primary)
+                    
+                    Spacer()
+                    
+                    Text(selectedCuisineName)
+                        .foregroundStyle(.secondary)
+                    
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(.regularMaterial)
+                .cornerRadius(8)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+    
+    // MARK: - Helper Views
+    
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.headline)
+            .foregroundStyle(.primary)
+    }
+    
+    private func errorView(_ error: String) -> some View {
+        HStack {
+            Image(systemName: "exclamationmark.triangle")
+                .foregroundStyle(.red)
+            Text(error)
+                .font(.caption)
+                .foregroundStyle(.red)
+            Spacer()
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.regularMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(.red.opacity(0.3), lineWidth: 1)
+                )
+        )
+    }
+    
+    private func successView(_ message: String) -> some View {
+        HStack {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.green)
+            Spacer()
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.regularMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(.green.opacity(0.3), lineWidth: 1)
+                )
+        )
+    }
+    
+    // MARK: - Buttons
+    
+    private var saveButton: some View {
+        Button(action: save) {
+            if isSaving {
+                ProgressView()
+                    .tint(.primary)
+            } else {
+                Text("Сохранить")
+                    .bold()
+            }
+        }
+        .disabled(isSaving)
+    }
+    
+    // MARK: - Computed Properties
+    
+    private var selectedCategoryName: String {
+        categories.first(where: { $0.id == selectedCategoryId })?.name ?? "Выберите"
+    }
+    
+    private var selectedCuisineName: String {
         guard let id = selectedCuisineId else { return "Не выбрано" }
         return cuisines.first(where: { $0.id == id })?.name ?? "Не выбрано"
     }
-
-    // MARK: - Loads
-
+    
+    // MARK: - Load Data
+    
     private func loadCategories() {
         do {
             categories = try DatabaseManager.shared.fetchCategories()
@@ -182,125 +360,117 @@ struct AddRecipeView: View {
             errorText = error.localizedDescription
         }
     }
-
+    
     private func loadCuisines() {
         do {
-            let raw = try DatabaseManager.shared.fetchAllCuisines()
-
-            // ✅ 1) trim
-            // ✅ 2) первая буква заглавная
-            // ✅ 3) дедуп по lowercased(trim) -> уберёт “азиатская” дубль
-            var dict: [String: CuisineRow] = [:]
-            dict.reserveCapacity(raw.count)
-
-            for cu in raw {
-                let trimmed = cu.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty { continue }
-
-                let pretty: String = {
-                    guard let first = trimmed.first else { return trimmed }
-                    return String(first).uppercased() + trimmed.dropFirst()
-                }()
-
-                let key = pretty.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-
-                // если дубль — оставляем тот, у которого имя уже “красивее” (с большой),
-                // а если оба одинаковые — оставляем первый
-                if let existing = dict[key] {
-                    let existingIsCapitalized = existing.name.first.map { String($0) == String($0).uppercased() } ?? false
-                    let newIsCapitalized = pretty.first.map { String($0) == String($0).uppercased() } ?? false
-
-                    if !existingIsCapitalized && newIsCapitalized {
-                        dict[key] = CuisineRow(id: cu.id, name: pretty)
-                    }
-                } else {
-                    dict[key] = CuisineRow(id: cu.id, name: pretty)
+            cuisines = try DatabaseManager.shared.fetchAllCuisines()
+                .map { cuisine in
+                    let trimmed = cuisine.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let pretty = trimmed.prefix(1).uppercased() + trimmed.dropFirst().lowercased()
+                    return CuisineRow(id: cuisine.id, name: pretty)
                 }
-            }
-
-            cuisines = dict.values.sorted { $0.name < $1.name }
-
+                .sorted { $0.name < $1.name }
+                .reduce(into: [String: CuisineRow]()) { dict, cuisine in
+                    let key = cuisine.name.lowercased()
+                    if dict[key] == nil {
+                        dict[key] = cuisine
+                    }
+                }
+                .values
+                .sorted { $0.name < $1.name }
         } catch {
-            errorText = "Ошибка кухонь: \(error.localizedDescription)"
+            errorText = "Ошибка загрузки кухонь: \(error.localizedDescription)"
             cuisines = []
         }
     }
-
-    // MARK: - Save
-
+    
+    // MARK: - Save Action
+    
     private func save() {
-        do {
-            errorText = nil
-            successText = nil
-
-            let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-            if cleanTitle.isEmpty {
-                errorText = "Добавь название"
-                return
+        isSaving = true
+        errorText = nil
+        successText = nil
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                if cleanTitle.isEmpty {
+                    throw NSError(domain: "Validation", code: 1, userInfo: [NSLocalizedDescriptionKey: "Добавь название"])
+                }
+                
+                let timeMinutes = Int(timeText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+                
+                let lines = ingredientsText
+                    .split(separator: "\n")
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                
+                let cleanInstructions = instructions.trimmingCharacters(in: .whitespacesAndNewlines)
+                if cleanInstructions.isEmpty {
+                    throw NSError(domain: "Validation", code: 2, userInfo: [NSLocalizedDescriptionKey: "Добавь шаги приготовления"])
+                }
+                
+                let cuisineName = selectedCuisineId
+                    .flatMap { id in cuisines.first { $0.id == id } }
+                    .map { $0.name }
+                
+                try DatabaseManager.shared.addRecipe(
+                    title: cleanTitle,
+                    categoryId: selectedCategoryId,
+                    cuisineName: cuisineName,
+                    difficulty: difficulty,
+                    timeMinutes: timeMinutes,
+                    servingsText: servings.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : servings,
+                    instructions: cleanInstructions,
+                    ingredientsLines: lines
+                )
+                
+                DispatchQueue.main.async {
+                    successText = "Рецепт сохранён! ✅"
+                    isSaving = false
+                    
+                    // Очищаем форму
+                    title = ""
+                    timeText = ""
+                    servings = ""
+                    difficulty = "medium"
+                    ingredientsText = ""
+                    instructions = ""
+                    selectedCuisineId = nil
+                    
+                    // Скрываем сообщение через 2 секунды
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        successText = nil
+                    }
+                }
+                
+            } catch {
+                DispatchQueue.main.async {
+                    errorText = error.localizedDescription
+                    isSaving = false
+                }
             }
-
-            let timeMinutes = Int(timeText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
-
-            let lines = ingredientsText
-                .split(separator: "\n")
-                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-
-            let cleanInstructions = instructions.trimmingCharacters(in: .whitespacesAndNewlines)
-            if cleanInstructions.isEmpty {
-                errorText = "Добавь шаги приготовления"
-                return
-            }
-
-            let cuisineName: String? = {
-                guard let id = selectedCuisineId else { return nil }
-                return cuisines.first(where: { $0.id == id })?.name
-            }()
-
-            try DatabaseManager.shared.addRecipe(
-                title: cleanTitle,
-                categoryId: selectedCategoryId,
-                cuisineName: cuisineName,
-                difficulty: difficulty,
-                timeMinutes: timeMinutes,
-                servingsText: servings.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : servings,
-                instructions: cleanInstructions,
-                ingredientsLines: lines
-            )
-
-            successText = "Сохранено ✅"
-
-            title = ""
-            timeText = ""
-            servings = ""
-            difficulty = "medium"
-            ingredientsText = ""
-            instructions = ""
-            selectedCuisineId = nil
-
-        } catch {
-            errorText = error.localizedDescription
         }
     }
+}
 
-    // MARK: - Mouse sticker helper (как у вас)
+// MARK: - Mouse Sticker
 
-    private struct MouseSticker: View {
-        let name: String
-        let size: CGFloat
-
-        init(_ name: String, size: CGFloat) {
-            self.name = name
-            self.size = size
-        }
-
-        var body: some View {
-            Image(name)
-                .resizable()
-                .scaledToFill()
-                .frame(width: size, height: size)
-                .clipped()
-                .accessibilityHidden(true)
-        }
+private struct MouseSticker: View {
+    let name: String
+    let size: CGFloat
+    
+    var body: some View {
+        Image(name)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
     }
+}
+
+// MARK: - Preview
+
+#Preview {
+    AddRecipeView()
 }
