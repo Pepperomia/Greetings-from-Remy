@@ -24,14 +24,15 @@ struct RecipesListView: View {
     private enum UI {
         static let mouseSize: CGFloat = 140
         static let headerTopPadding: CGFloat = 10
-        static let headerSidePadding: CGFloat = 16  // Увеличила для отступов
+        static let headerSidePadding: CGFloat = 20  // Увеличила для отступов
         
         static let cardRadius: CGFloat = 22  // Вернула как было
         static let cardVPad: CGFloat = 14    // Вернула как было
-        static let cardHPad: CGFloat = 16    // Вернула как было
+        static let cardHPad: CGFloat = 24    // Вернула как было
         
         static let selectedRingOpacity: Double = 0.35
         static let ringWidth: CGFloat = 2
+        
     }
     
     // MARK: - Body
@@ -100,17 +101,20 @@ struct RecipesListView: View {
     
     private var filtersRow: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    timeFilterButton
-                    cuisineMenuButton
-                    surpriseButton
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, UI.headerSidePadding)
+            HStack {
+                timeFilterButton
+                    .frame(width: UI.mouseSize, height: UI.mouseSize)
+                Spacer()
+                cuisineMenuButton
+                    .frame(width: UI.mouseSize, height: UI.mouseSize)
+                Spacer()
+                surpriseButton
+                    .frame(width: UI.mouseSize, height: UI.mouseSize)
             }
+            .padding(.horizontal, UI.headerSidePadding)
         }
     }
+
     
     private var timeFilterButton: some View {
         Button {
@@ -202,12 +206,12 @@ struct RecipesListView: View {
                         title: recipe.title,
                         subtitle: "\(recipe.timeMinutes) мин • \(diffLabel(recipe.difficulty))"
                     )
+                    .frame(maxWidth: 350)  // ограничиваем ширину
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, UI.headerSidePadding)  // Отступы для карточек
             }
         }
-        .padding(.top, 8)
+        .padding(.horizontal, UI.headerSidePadding)
     }
     
     // MARK: - Helper Views
@@ -354,9 +358,11 @@ private struct RecipeCardRow: View {
     
     @State private var isPressed = false
     
-    private let cardRadius: CGFloat = 22
-    private let cardVPad: CGFloat = 14
-    private let cardHPad: CGFloat = 16
+    // Те самые воздушные настройки
+    private let cardRadius: CGFloat = 24        // побольше радиус
+    private let cardVPad: CGFloat = 16          // воздух сверху-снизу
+    private let cardHPad: CGFloat = 18          // воздух слева-справа
+    private let shadowRadius: CGFloat = 8        // лёгкая тень
     
     var body: some View {
         HStack(spacing: 12) {
@@ -381,13 +387,20 @@ private struct RecipeCardRow: View {
         }
         .padding(.vertical, cardVPad)
         .padding(.horizontal, cardHPad)
-        .glassCard(radius: cardRadius)
+        .background(
+            RoundedRectangle(cornerRadius: cardRadius)
+                .fill(.regularMaterial)
+                .shadow(color: .black.opacity(0.1), radius: shadowRadius, x: 0, y: 4)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: cardRadius)
+                .stroke(.white.opacity(0.2), lineWidth: 1)
+        )
         .scaleEffect(isPressed ? 0.98 : 1.0)
         .onTapGesture {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
                 isPressed = true
             }
-            
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
                     isPressed = false

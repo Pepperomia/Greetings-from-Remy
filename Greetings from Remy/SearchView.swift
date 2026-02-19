@@ -18,8 +18,8 @@ struct SearchView: View {
     // MARK: - Constants
     
     private enum Constants {
-        static let mouseSize: CGFloat = 50
-        static let plusSize: CGFloat = 32
+        static let mouseSize: CGFloat = 74
+        static let plusSize: CGFloat = 58
         static let horizontalPadding: CGFloat = 12
         static let cardSpacing: CGFloat = 10
     }
