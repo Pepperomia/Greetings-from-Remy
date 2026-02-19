@@ -356,13 +356,11 @@ private struct RecipeCardRow: View {
     let title: String
     let subtitle: String
     
-    @State private var isPressed = false
+    // Убрали isPressed и onTapGesture полностью!
     
-    // Те самые воздушные настройки
-    private let cardRadius: CGFloat = 24        // побольше радиус
-    private let cardVPad: CGFloat = 16          // воздух сверху-снизу
-    private let cardHPad: CGFloat = 18          // воздух слева-справа
-    private let shadowRadius: CGFloat = 8        // лёгкая тень
+    private let cardRadius: CGFloat = 24
+    private let cardVPad: CGFloat = 16
+    private let cardHPad: CGFloat = 18
     
     var body: some View {
         HStack(spacing: 12) {
@@ -383,33 +381,20 @@ private struct RecipeCardRow: View {
             Image(systemName: "chevron.right")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
-                .offset(x: isPressed ? 5 : 0)
         }
         .padding(.vertical, cardVPad)
         .padding(.horizontal, cardHPad)
         .background(
             RoundedRectangle(cornerRadius: cardRadius)
                 .fill(.regularMaterial)
-                .shadow(color: .black.opacity(0.1), radius: shadowRadius, x: 0, y: 4)
+                .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
         )
         .overlay(
             RoundedRectangle(cornerRadius: cardRadius)
                 .stroke(.white.opacity(0.2), lineWidth: 1)
         )
-        .scaleEffect(isPressed ? 0.98 : 1.0)
-        .onTapGesture {
-            withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
-                isPressed = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
-                    isPressed = false
-                }
-            }
-        }
     }
 }
-
 // MARK: - Mouse Sticker
 
 private struct MouseSticker: View {
