@@ -78,14 +78,6 @@ struct SearchView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Сброс", action: resetFilters)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Picker("Режим", selection: $searchMode) {
-                        Text("По рецептам").tag(SearchMode.recipes)
-                        Text("По ингредиентам").tag(SearchMode.ingredients)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 200)
-                }
             }
             .navigationDestination(isPresented: surpriseBinding) {
                 if let id = surpriseRecipeId {
@@ -110,6 +102,14 @@ struct SearchView: View {
     private var content: some View {
         ScrollView {
             VStack(spacing: Constants.cardSpacing) {
+                // Переключатель режимов (теперь здесь!)
+                Picker("Режим", selection: $searchMode) {
+                    Text("📖 Рецепты").tag(SearchMode.recipes)
+                    Text("🥕 Ингредиенты").tag(SearchMode.ingredients)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, Constants.horizontalPadding)
+                
                 // Показываем разные карточки в зависимости от режима
                 if searchMode == .recipes {
                     recipesSearchCard
