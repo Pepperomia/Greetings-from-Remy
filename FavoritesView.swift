@@ -10,7 +10,7 @@ struct FavoritesView: View {
     // MARK: - Constants
     
     private enum Constants {
-        static let mouseLoveSize: CGFloat = 200
+        static let mouseLoveSize: CGFloat = 190
         static let headerTopPadding: CGFloat = 10
         static let headerSidePadding: CGFloat = 20
         
