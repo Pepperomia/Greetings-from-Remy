@@ -5,9 +5,11 @@ struct Greetings_from_RemyApp: App {
     // MARK: - Init
     
     init() {
-        // Копируем базу данных при запуске приложения
-        DatabaseBootstrap.ensureDatabaseCopiedFromBundle()
-        // Проверяем статус (опционально, для отладки)
+        try? DatabaseBootstrap.removeDatabase()
+        _ = DatabaseBootstrap.ensureDatabaseCopiedFromBundle()
+        let copied = DatabaseBootstrap.ensureDatabaseCopiedFromBundle()
+        print("📦 copied:", copied)
+
         DatabaseBootstrap.checkDatabaseStatus()
     }
     

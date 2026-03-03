@@ -3,7 +3,7 @@ import Foundation
 enum DatabaseBootstrap {
     // MARK: - Configuration
     
-    static let dbFileName = "recipes_app_seed_v1.sqlite"
+    static let dbFileName = "recipes_app_seed_final.sqlite"
     static let appDirectoryName = "GreetingsFromRemy"
     
     // MARK: - Public Methods

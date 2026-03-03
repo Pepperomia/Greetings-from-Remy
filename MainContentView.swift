@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MainContentView: View {
+    
     // MARK: - State
     
     @State private var selectedTab = 0
@@ -20,13 +21,16 @@ struct MainContentView: View {
                 mainContent
             }
         }
-        .onAppear(perform: bootstrap)
+        .onAppear {
+            bootstrap()
+        }
     }
     
     // MARK: - Main Content
     
     private var mainContent: some View {
         TabView(selection: $selectedTab) {
+            
             CategoriesView()
                 .tabItem {
                     Label("Каталог", systemImage: "book.closed")
@@ -53,7 +57,7 @@ struct MainContentView: View {
         }
     }
     
-    // MARK: - Splash View
+    // MARK: - Splash
     
     private var splashView: some View {
         ZStack {
@@ -72,10 +76,8 @@ struct MainContentView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 
-                if bootstrapError != nil {
-                    ProgressView()
-                        .padding(.top, 20)
-                }
+                ProgressView()
+                    .padding(.top, 20)
             }
         }
         .ignoresSafeArea()
@@ -101,43 +103,19 @@ struct MainContentView: View {
         guard !didBootstrap else { return }
         didBootstrap = true
         
-        let minimumSplashTime = 1.5
+        let minimumSplashTime: TimeInterval = 1.5
         let startTime = Date()
         
         DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                // Копируем базу из Bundle, если её нет
-                DatabaseBootstrap.ensureDatabaseCopiedFromBundle()
-                // Проверяем статус базы
-                DatabaseBootstrap.checkDatabaseStatus()
-                
-                // Инициализируем начальные данные
-                try DatabaseManager.shared.ensureInitialData()
-                // Проверяем индексы
-                try DatabaseManager.shared.checkDatabaseHealth()
-                
-                print("✅ База данных готова")
-                
-                let elapsedTime = Date().timeIntervalSince(startTime)
-                let remainingTime = max(0, minimumSplashTime - elapsedTime)
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + remainingTime) {
-                    withAnimation(.easeOut(duration: 0.5)) {
-                        showSplash = false
-                    }
-                }
-                
-            } catch {
-                print("❌ Ошибка инициализации БД: \(error)")
-                
-                DispatchQueue.main.async {
-                    bootstrapError = "Не удалось загрузить данные"
-                    
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        withAnimation(.easeOut(duration: 0.5)) {
-                            showSplash = false
-                        }
-                    }
+            
+            // Если нужно что-то инициализировать — делай здесь
+            
+            let elapsed = Date().timeIntervalSince(startTime)
+            let remaining = max(0, minimumSplashTime - elapsed)
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + remaining) {
+                withAnimation(.easeOut(duration: 0.4)) {
+                    showSplash = false
                 }
             }
         }
