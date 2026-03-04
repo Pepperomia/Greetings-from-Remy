@@ -7,34 +7,30 @@ struct FavoritesView: View {
     }
 
     @State private var items: [RecipeRow] = []
-    @State private var errorText: String?
-    @State private var isLoading = false
+    @State private var showAddCategory = false
 
     var body: some View {
+
         NavigationStack {
+
             ZStack {
+
                 AppBackground(.list)
 
                 ScrollView {
+
                     VStack(spacing: 20) {
 
                         header
 
-                        if isLoading {
-                            ProgressView()
-                                .padding(.top, 40)
-                        }
-                        else if let errorText {
-                            Text(errorText)
-                                .foregroundStyle(.red)
-                                .padding(.top, 40)
-                        }
-                        else if items.isEmpty {
+                        if items.isEmpty {
+
                             Text("Пока нет избранных рецептов")
                                 .padding(.top, 40)
                                 .foregroundStyle(.secondary)
-                        }
-                        else {
+
+                        } else {
+
                             list
                         }
                     }
@@ -43,22 +39,36 @@ struct FavoritesView: View {
             }
             .navigationTitle("Избранное")
             .navigationBarTitleDisplayMode(.inline)
+
             .toolbar {
+
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: load) {
-                        Image(systemName: "arrow.clockwise")
+
+                    Button {
+                        showAddCategory = true
+                    } label: {
+                        Image(systemName: "plus")
                     }
                 }
             }
-            .onAppear {
-                load()
+
+            .sheet(isPresented: $showAddCategory) {
+
+                AddCategorySheet {
+                    load()
+                }
             }
+        }
+
+        .onAppear {
+            load()
         }
     }
 
-    // MARK: - Header
+    // MARK: HEADER
 
     private var header: some View {
+
         HStack(spacing: 16) {
 
             Image(systemName: "heart.fill")
@@ -66,10 +76,12 @@ struct FavoritesView: View {
                 .foregroundStyle(.pink)
 
             VStack(alignment: .leading) {
+
                 Text("Избранное")
                     .font(.title3.bold())
 
                 if !items.isEmpty {
+
                     Text("\(items.count) рецептов")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -82,24 +94,56 @@ struct FavoritesView: View {
         .padding(.top, 10)
     }
 
-    // MARK: - List
+    // MARK: LIST
 
     private var list: some View {
-        LazyVStack(spacing: 12) {
-            ForEach(items) { recipe in
-                NavigationLink {
-                    RecipeDetailView(recipeId: recipe.id)
-                } label: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(recipe.title)
-                            .font(.headline)
 
-                        Text(recipe.subtitle)
-                            .font(.subheadline)
+        LazyVStack(spacing: 12) {
+
+            ForEach(items) { recipe in
+
+                NavigationLink {
+
+                    RecipeDetailView(recipeId: recipe.id)
+
+                } label: {
+
+                    HStack {
+
+                        VStack(alignment: .leading, spacing: 6) {
+
+                            Text(recipe.title)
+                                .font(.headline)
+
+                            HStack(spacing: 8) {
+
+                                Text(recipe.timeText)
+                                    .font(.subheadline)
+
+                                if !recipe.timeText.isEmpty && !recipe.difficultyText.isEmpty {
+
+                                    Text("•")
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Text(recipe.difficultyText)
+                                    .font(.subheadline)
+                            }
+                            .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     .padding()
-                    .glassCard()
+
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(.regularMaterial)
+                    )
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, Constants.headerSidePadding)
@@ -107,28 +151,15 @@ struct FavoritesView: View {
         }
     }
 
-    // MARK: - Data
+    // MARK: DATA
 
     private func load() {
-        isLoading = true
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                // Временно используем категорию 1 как "избранное"
-                let recipes = try DatabaseManager.shared.fetchRecipes(categoryId: 1)
-
-                DispatchQueue.main.async {
-                    items = recipes
-                    errorText = nil
-                    isLoading = false
-                }
-
-            } catch {
-                DispatchQueue.main.async {
-                    errorText = error.localizedDescription
-                    isLoading = false
-                }
-            }
-        }
+        // пока избранное не подключено к БД
+        items = []
     }
+}
+
+#Preview {
+    FavoritesView()
 }

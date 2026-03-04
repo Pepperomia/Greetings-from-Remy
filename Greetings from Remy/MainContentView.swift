@@ -30,24 +30,30 @@ struct MainContentView: View {
     
     private var mainContent: some View {
         TabView(selection: $selectedTab) {
-            
+
             CategoriesView()
                 .tabItem {
                     Label("Каталог", systemImage: "book.closed")
                 }
                 .tag(0)
-            
+
+            SearchView()
+                .tabItem {
+                    Label("Поиск", systemImage: "magnifyingglass")
+                }
+                .tag(1)
+
             AddRecipeView()
                 .tabItem {
                     Label("Добавить", systemImage: "plus.circle")
                 }
-                .tag(1)
-            
+                .tag(2)
+
             FavoritesView()
                 .tabItem {
                     Label("Избранное", systemImage: "heart")
                 }
-                .tag(2)
+                .tag(3)
         }
         .tint(.primary)
         .overlay(alignment: .bottom) {

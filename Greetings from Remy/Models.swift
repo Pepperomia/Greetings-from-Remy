@@ -45,11 +45,39 @@ struct CategoryRow: Identifiable, Hashable {
 struct RecipeRow: Identifiable {
     let id: Int
     let title: String
-    let timeText: String
-    let difficultyText: String
+    let timeMinutes: Int
+    let difficulty: String
+    var timeText: String {
+        "\(timeMinutes) мин"
+    }
+    var difficultyText: String {
+        switch difficulty {
+        case "easy": return "легко"
+        case "hard": return "сложно"
+        default: return "средне"
+        }
+    }
     
-    var subtitle: String {
-        "\(timeText) • \(difficultyText)"
+    // Инициализатор для searchRecipes
+    init(id: Int, title: String, timeMinutes: Int, difficulty: String) {
+        self.id = id
+        self.title = title
+        self.timeMinutes = timeMinutes
+        self.difficulty = difficulty
+    }
+    
+    // Инициализатор для других методов
+    init(id: Int, title: String, timeText: String, difficultyText: String) {
+        self.id = id
+        self.title = title
+        self.timeMinutes = 0
+        self.difficulty = {
+            switch difficultyText {
+            case "легко": return "easy"
+            case "сложно": return "hard"
+            default: return "medium"
+            }
+        }()
     }
 }
 
@@ -110,4 +138,10 @@ struct IngredientLine: Identifiable {
     let name: String
     let amountText: String
     let sortOrder: Int
+}
+struct UserRecipeData {
+    let recipeId: Int
+    let isFavorite: Bool
+    let cookedCount: Int
+    let notes: String?
 }

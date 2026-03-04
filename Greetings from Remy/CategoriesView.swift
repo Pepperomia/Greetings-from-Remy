@@ -5,6 +5,8 @@ struct CategoriesView: View {
     @State private var items: [CategoryRow] = []
     @State private var errorText: String?
     @State private var showSearch = false
+    
+    @State private var showAddCategory = false
 
     // Мышь вместо поиска
     @State private var isSearchExpanded = false
@@ -48,7 +50,23 @@ struct CategoriesView: View {
                 SearchView()
             }
             .onAppear { load() }
+            
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showAddCategory = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+            .sheet(isPresented: $showAddCategory) {
+                AddCategorySheet {
+                    load()
+                }
+            }
         }
+        
     }
 
     // MARK: - Header Section
