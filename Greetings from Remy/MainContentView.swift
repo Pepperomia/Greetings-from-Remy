@@ -68,23 +68,34 @@ struct MainContentView: View {
     private var splashView: some View {
         ZStack {
             AppBackground()
-            
-            VStack(spacing: 20) {
+
+            VStack(spacing: 22) {
+
+                Spacer()
+
                 Image("mouse_shef")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 150, height: 150)
-                
+                    .frame(width: 200)
+                    .position(x:220, y: 290)
+
                 Text("Привет от Реми")
-                    .font(.largeTitle.bold())
-                
+                    .font(.system(size: 36, weight: .bold))
+                    .multilineTextAlignment(.center)
+                    .position(x: 225, y: 200)
+
                 Text("Кулинарные рецепты")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                
+                    .position(x: 225, y: 200)
+
                 ProgressView()
-                    .padding(.top, 20)
+                    .padding(.top, 12)
+
+                Spacer()
             }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 32)
         }
         .ignoresSafeArea()
     }
