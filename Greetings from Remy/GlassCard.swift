@@ -79,7 +79,7 @@ struct UltraThinGlassCard: ViewModifier {
             )
             .shadow(
                 color: hasShadow ? Color.black.opacity(0.1) : .clear,
-                radius: 8,
+                radius: 14,
                 x: 0,
                 y: 4
             )

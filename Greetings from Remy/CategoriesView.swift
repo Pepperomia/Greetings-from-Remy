@@ -6,6 +6,8 @@ struct CategoriesView: View {
     @State private var errorText: String?
     @State private var showSearch = false
     
+    @State private var pressedCard: Int?
+    
     @State private var showAddCategory = false
 
     // Мышь вместо поиска
@@ -28,7 +30,8 @@ struct CategoriesView: View {
                 AppBackground(.home)
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 16) {
+
+                    VStack(spacing: 18) {
 
                         headerSection
 
@@ -38,7 +41,9 @@ struct CategoriesView: View {
                             categoriesGrid
                         }
                     }
-                    .padding(.bottom, 28)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 6)
+                    .padding(.bottom, 40)
                 }
             }
             .navigationTitle("")
@@ -172,35 +177,49 @@ struct CategoriesView: View {
 
     // MARK: - Categories Grid
 
+    // MARK: - Categories Grid
+
     private var categoriesGrid: some View {
-        LazyVGrid(columns: [GridItem(.fixed(180), spacing: 16), GridItem(.fixed(180), spacing: 16)], spacing: 16) {
+
+        LazyVGrid(
+            columns: [
+                GridItem(.fixed(170), spacing: 16),
+                GridItem(.fixed(170), spacing: 16)
+            ],
+            spacing: 16
+        ) {
+
             ForEach(items) { item in
+
                 NavigationLink {
                     RecipesListView(category: item)
                 } label: {
+
                     categoryCard(item)
                 }
                 .buttonStyle(.plain)
             }
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, UI.headerSidePadding)
         .padding(.top, 8)
     }
-
     private func categoryCard(_ item: CategoryRow) -> some View {
+
         let cardMetaData = cardMeta(for: item.name, count: item.count)
-        
-        return VStack(alignment: .leading, spacing: 8) {
-            // Изображение категории
+
+        return VStack(alignment: .leading, spacing: 10) {
+
             if let imageName = cardMetaData.imageName {
+
                 Image(imageName)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .aspectRatio(contentMode: .fit)
                     .frame(height: 120)
-                    .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
             } else {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+
+                RoundedRectangle(cornerRadius: 16)
                     .fill(.regularMaterial)
                     .frame(height: 120)
                     .overlay(
@@ -209,30 +228,33 @@ struct CategoriesView: View {
                             .foregroundStyle(.secondary)
                     )
             }
-            
-            VStack(alignment: .leading, spacing: 4) {
+
+            VStack(alignment: .leading, spacing: 6) {
+
                 Text(displayTitle(for: item.name))
                     .font(.headline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                
+
                 Text(cardMetaData.subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .frame(height: 32) // ← ФИКСИРОВАННАЯ ВЫСОТА ДЛЯ ТЕКСТА
+                    .frame(height: 32)
             }
-            .padding(.horizontal, 4)
+
+            Spacer()
         }
-        .padding(8)
-        .frame(height: 200) // ← ФИКСИРОВАННАЯ ВЫСОТА ВСЕЙ КАРТОЧКИ
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(.white.opacity(0.2), lineWidth: 1)
+        .padding(14)
+        .frame(height: 210)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.regularMaterial)
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22)
+                .stroke(.white.opacity(0.25), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 6)
+        .scaleEffect(1)
     }
     // MARK: - Error View
 

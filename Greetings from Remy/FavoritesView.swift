@@ -2,64 +2,51 @@ import SwiftUI
 
 struct FavoritesView: View {
 
-    private enum Constants {
-        static let headerSidePadding: CGFloat = 20
-    }
-
     @State private var items: [RecipeRow] = []
-    @State private var showAddCategory = false
 
     var body: some View {
 
         NavigationStack {
 
-            ZStack {
+            GeometryReader { geo in
 
-                AppBackground(.list)
+                ZStack {
 
-                ScrollView {
+                    AppBackground(.list)
 
-                    VStack(spacing: 20) {
+                    // HEADER
+                    VStack {
 
                         header
 
-                        if items.isEmpty {
-
-                            Text("Пока нет избранных рецептов")
-                                .padding(.top, 40)
-                                .foregroundStyle(.secondary)
-
-                        } else {
-
-                            list
-                        }
+                        Spacer()
                     }
-                    .padding(.bottom, 28)
+                    .padding(.top, geo.safeAreaInsets.top)
+
+                    // TOP MOUSE
+                    topMouse
+                        .position(
+                            x: 70,
+                            y: geo.safeAreaInsets.top + 52
+                        )
+
+                    // CENTER TEXT
+                    centerText
+                        .position(
+                            x: geo.size.width / 2,
+                            y: geo.size.height / 2
+                        )
+
+                    // BOTTOM MOUSE
+                    bottomMouse
+                        .position(
+                            x: geo.size.width / 2,
+                            y: geo.size.height - geo.safeAreaInsets.bottom - 84
+                        )
                 }
             }
-            .navigationTitle("Избранное")
-            .navigationBarTitleDisplayMode(.inline)
-
-            .toolbar {
-
-                ToolbarItem(placement: .topBarTrailing) {
-
-                    Button {
-                        showAddCategory = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                }
-            }
-
-            .sheet(isPresented: $showAddCategory) {
-
-                AddCategorySheet {
-                    load()
-                }
-            }
+            .navigationBarHidden(true)
         }
-
         .onAppear {
             load()
         }
@@ -69,93 +56,54 @@ struct FavoritesView: View {
 
     private var header: some View {
 
-        HStack(spacing: 16) {
+        HStack {
 
-            Image(systemName: "heart.fill")
-                .font(.system(size: 40))
-                .foregroundStyle(.pink)
-
-            VStack(alignment: .leading) {
-
-                Text("Избранное")
-                    .font(.title3.bold())
-
-                if !items.isEmpty {
-
-                    Text("\(items.count) рецептов")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            Text("Избранное")
+                .font(.title2.bold())
 
             Spacer()
         }
-        .padding(.horizontal, Constants.headerSidePadding)
-        .padding(.top, 10)
+        .padding(.horizontal, 124)
     }
 
-    // MARK: LIST
+    // MARK: TOP MOUSE
 
-    private var list: some View {
+    private var topMouse: some View {
 
-        LazyVStack(spacing: 12) {
+        Image("mouse_love")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 110)
+    }
 
-            ForEach(items) { recipe in
+    // MARK: CENTER TEXT
 
-                NavigationLink {
+    private var centerText: some View {
 
-                    RecipeDetailView(recipeId: recipe.id)
+        VStack(spacing: 12) {
 
-                } label: {
+            Text("Пока пусто")
+                .font(.headline)
 
-                    HStack {
-
-                        VStack(alignment: .leading, spacing: 6) {
-
-                            Text(recipe.title)
-                                .font(.headline)
-
-                            HStack(spacing: 8) {
-
-                                Text(recipe.timeText)
-                                    .font(.subheadline)
-
-                                if !recipe.timeText.isEmpty && !recipe.difficultyText.isEmpty {
-
-                                    Text("•")
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Text(recipe.difficultyText)
-                                    .font(.subheadline)
-                            }
-                            .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding()
-
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(.regularMaterial)
-                    )
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, Constants.headerSidePadding)
-            }
+            Text("Добавьте любимые рецепты")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
+    }
+
+    // MARK: BOTTOM MOUSE
+
+    private var bottomMouse: some View {
+
+        Image("mouse_look")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 560)
     }
 
     // MARK: DATA
 
     private func load() {
-
-        // пока избранное не подключено к БД
         items = []
     }
 }

@@ -99,7 +99,7 @@ struct MainContentView: View {
             .padding(.vertical, 8)
             .background(.regularMaterial)
             .clipShape(Capsule())
-            .padding(.bottom, 80)
+            .padding(.bottom, 6)
             .transition(.move(edge: .bottom).combined(with: .opacity))
     }
     

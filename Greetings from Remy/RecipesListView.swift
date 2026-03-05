@@ -126,8 +126,8 @@ private extension RecipesListView {
 
                     RecipeCardRow(
                         title: recipe.title,
-                        timeText: recipe.timeText ?? "",
-                        difficultyText: recipe.difficultyText ?? ""
+                        timeText: recipe.timeText,
+                        difficultyText: recipe.difficultyText
                     )
                 }
             }
