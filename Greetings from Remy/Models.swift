@@ -47,9 +47,12 @@ struct RecipeRow: Identifiable {
     let title: String
     let timeMinutes: Int
     let difficulty: String
+    let calories: Int?
+
     var timeText: String {
         "\(timeMinutes) мин"
     }
+    
     var difficultyText: String {
         switch difficulty {
         case "easy": return "легко"
@@ -59,15 +62,16 @@ struct RecipeRow: Identifiable {
     }
     
     // Инициализатор для searchRecipes
-    init(id: Int, title: String, timeMinutes: Int, difficulty: String) {
+    init(id: Int, title: String, timeMinutes: Int, difficulty: String, calories: Int? = nil) {
         self.id = id
         self.title = title
         self.timeMinutes = timeMinutes
         self.difficulty = difficulty
+        self.calories = calories
     }
     
     // Инициализатор для других методов
-    init(id: Int, title: String, timeText: String, difficultyText: String) {
+    init(id: Int, title: String, timeText: String, difficultyText: String, calories: Int? = nil) {
         self.id = id
         self.title = title
         self.timeMinutes = 0
@@ -78,13 +82,13 @@ struct RecipeRow: Identifiable {
             default: return "medium"
             }
         }()
+        self.calories = calories
     }
 }
 
 // MARK: - Recipe Detail
 
 struct RecipeDetail: Identifiable {
-    
     let id: Int
     let title: String
     
@@ -131,6 +135,7 @@ struct RecipeDetail: Identifiable {
         return parts.joined(separator: " • ")
     }
 }
+
 // MARK: - Ingredient Line
 
 struct IngredientLine: Identifiable {
@@ -139,6 +144,9 @@ struct IngredientLine: Identifiable {
     let amountText: String
     let sortOrder: Int
 }
+
+// MARK: - User Recipe Data
+
 struct UserRecipeData {
     let recipeId: Int
     let isFavorite: Bool

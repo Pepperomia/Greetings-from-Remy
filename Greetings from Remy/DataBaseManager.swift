@@ -123,7 +123,7 @@ final class DatabaseManager {
     func fetchRecipes(categoryId: Int, maxMinutes: Int? = nil) throws -> [RecipeRow] {
 
         var sql = """
-        SELECT id,title,time_minutes,difficulty
+        SELECT id, title, time_minutes, difficulty, calories
         FROM recipes
         WHERE category_id=? AND is_archived=0
         """
@@ -143,7 +143,8 @@ final class DatabaseManager {
                 id: row[0] as? Int ?? 0,
                 title: row[1] as? String ?? "",
                 timeMinutes: row[2] as? Int ?? 0,
-                difficulty: row[3] as? String ?? "medium"
+                difficulty: row[3] as? String ?? "medium",
+                calories: row[4] as? Int
             )
         }
     }
@@ -153,7 +154,7 @@ final class DatabaseManager {
     func searchRecipes(query: String) throws -> [RecipeRow] {
 
         let sql = """
-        SELECT DISTINCT r.id,r.title,r.time_minutes,r.difficulty
+        SELECT DISTINCT r.id,r.title,r.time_minutes,r.difficulty,r.calories
         FROM recipes r
         LEFT JOIN recipe_ingredients ri ON ri.recipe_id=r.id
         LEFT JOIN ingredients i ON i.id=ri.ingredient_id
@@ -172,7 +173,8 @@ final class DatabaseManager {
                 id: row[0] as? Int ?? 0,
                 title: row[1] as? String ?? "",
                 timeMinutes: row[2] as? Int ?? 0,
-                difficulty: row[3] as? String ?? "medium"
+                difficulty: row[3] as? String ?? "medium",
+                calories: row[4] as? Int ?? 0
             )
         }
     }
