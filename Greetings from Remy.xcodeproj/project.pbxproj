@@ -36,9 +36,22 @@
 		D4F1BB812F3A5FD000A4E49C /* libsqlite3.0.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.0.tbd; path = usr/lib/libsqlite3.0.tbd; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D46F9F212F5D791A00734E75 /* Exceptions for "Greetings from Remy" folder in "Greetings from Remy" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				CuisinesManagementView.swift,
+			);
+			target = D4F1BB472F3A5BA200A4E49C /* Greetings from Remy */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D4F1BB4A2F3A5BA200A4E49C /* Greetings from Remy */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D46F9F212F5D791A00734E75 /* Exceptions for "Greetings from Remy" folder in "Greetings from Remy" target */,
+			);
 			path = "Greetings from Remy";
 			sourceTree = "<group>";
 		};
@@ -80,11 +93,19 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		D41B88802F5D6D2200545DB4 /* New Group */ = {
+			isa = PBXGroup;
+			children = (
+				D4F1BB4A2F3A5BA200A4E49C /* Greetings from Remy */,
+			);
+			path = "New Group";
+			sourceTree = "<group>";
+		};
 		D4F1BB3F2F3A5BA200A4E49C = {
 			isa = PBXGroup;
 			children = (
 				D4A7BAF12F40D4D100A6D7E9 /* Assets.xcassets */,
-				D4F1BB4A2F3A5BA200A4E49C /* Greetings from Remy */,
+				D41B88802F5D6D2200545DB4 /* New Group */,
 				D4F1BB582F3A5BA200A4E49C /* Greetings from RemyTests */,
 				D4F1BB622F3A5BA200A4E49C /* Greetings from RemyUITests */,
 				D4F1BB802F3A5FD000A4E49C /* Frameworks */,

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // MARK: - Cuisine
 
@@ -152,4 +153,48 @@ struct UserRecipeData {
     let isFavorite: Bool
     let cookedCount: Int
     let notes: String?
+}
+
+// MARK: - Preview Helpers
+
+extension CategoryRow {
+    static var preview: CategoryRow {
+        CategoryRow(id: 1, name: "Салаты", count: 5)
+    }
+    
+    static var previews: [CategoryRow] {
+        [
+            CategoryRow(id: 1, name: "Салаты", count: 5),
+            CategoryRow(id: 2, name: "Супы", count: 3),
+            CategoryRow(id: 3, name: "Десерты", count: 0)
+        ]
+    }
+}
+
+extension CuisineRow {
+    static var preview: CuisineRow {
+        CuisineRow(id: 1, name: "Итальянская")
+    }
+    
+    static var previews: [CuisineRow] {
+        [
+            CuisineRow(id: 1, name: "Итальянская"),
+            CuisineRow(id: 2, name: "Французская"),
+            CuisineRow(id: 3, name: "Японская")
+        ]
+    }
+}
+
+extension RecipeRow {
+    static var preview: RecipeRow {
+        RecipeRow(id: 1, title: "Цезарь с курицей", timeMinutes: 25, difficulty: "easy", calories: 350)
+    }
+    
+    static var previews: [RecipeRow] {
+        [
+            RecipeRow(id: 1, title: "Цезарь с курицей", timeMinutes: 25, difficulty: "easy", calories: 350),
+            RecipeRow(id: 2, title: "Борщ", timeMinutes: 90, difficulty: "medium", calories: 250),
+            RecipeRow(id: 3, title: "Паста карбонара", timeMinutes: 30, difficulty: "medium", calories: 450)
+        ]
+    }
 }

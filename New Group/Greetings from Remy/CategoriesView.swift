@@ -177,10 +177,7 @@ struct CategoriesView: View {
 
     // MARK: - Categories Grid
 
-    // MARK: - Categories Grid
-
     private var categoriesGrid: some View {
-
         LazyVGrid(
             columns: [
                 GridItem(.fixed(170), spacing: 16),
@@ -188,13 +185,10 @@ struct CategoriesView: View {
             ],
             spacing: 16
         ) {
-
             ForEach(items) { item in
-
                 NavigationLink {
                     RecipesListView(category: item)
                 } label: {
-
                     categoryCard(item)
                 }
                 .buttonStyle(.plain)
@@ -204,23 +198,21 @@ struct CategoriesView: View {
         .padding(.horizontal, UI.headerSidePadding)
         .padding(.top, 8)
     }
+
     private func categoryCard(_ item: CategoryRow) -> some View {
-
         let cardMetaData = cardMeta(for: item.name, count: item.count)
-
+        
         return VStack(alignment: .leading, spacing: 10) {
-
+            
             if let imageName = cardMetaData.imageName {
-
                 Image(imageName)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(height: 120)
-
+                    .padding(.top, 8)
             } else {
-
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.regularMaterial)
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(.ultraThinMaterial)
                     .frame(height: 120)
                     .overlay(
                         Image(systemName: "fork.knife")
@@ -228,34 +220,41 @@ struct CategoriesView: View {
                             .foregroundStyle(.secondary)
                     )
             }
-
+            
             VStack(alignment: .leading, spacing: 6) {
-
                 Text(displayTitle(for: item.name))
                     .font(.headline)
-
+                    .foregroundStyle(.primary)
+                
                 Text(cardMetaData.subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .frame(height: 32)
             }
-
-            Spacer()
+            .padding(.horizontal, 4)
+            
+            Spacer(minLength: 0)
         }
-        .padding(14)
-        .frame(height: 210)
+        .padding(12)
+        .frame(height: 220)
         .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.regularMaterial)
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(.ultraThinMaterial)  // Меняем на ultraThinMaterial
+                .opacity(0.8)  // Добавляем прозрачность
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 22)
-                .stroke(.white.opacity(0.25), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 28)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)  // Тонкая обводка
         )
-        .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 6)
-        .scaleEffect(1)
+        .shadow(
+            color: .black.opacity(0.1),  // Более легкая тень
+            radius: 15,  // Больше радиус для парения
+            x: 0,
+            y: 8  // Тень смещена вниз
+        )
     }
+
     // MARK: - Error View
 
     private func errorView(_ error: String) -> some View {
@@ -272,11 +271,16 @@ struct CategoriesView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
         .padding(.horizontal, 20)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(.ultraThinMaterial)  // Меняем на ultraThinMaterial
+        .opacity(0.9)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 28)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 8)
         .padding(.horizontal, UI.headerSidePadding)
     }
-
     // MARK: - Data
     private let categoryOrder: [String] = [
         "Завтраки",

@@ -6,15 +6,19 @@ struct RecipesListView: View {
 
     @State private var items: [RecipeRow] = []
     @State private var errorText: String?
+    @State private var showingDeleteAlert = false
+    @State private var isDeleting = false
+    @State private var showingDeleteManagement = false // Добавлено
 
     @State private var filter30 = false
-    @State private var sortByCalories = false // Новый state для сортировки по калориям
+    @State private var sortByCalories = false
     @State private var surpriseRecipeId: Int?
 
     @State private var isLoading = false
     
-    // Сохраняем оригинальные данные для сброса сортировки
     @State private var originalItems: [RecipeRow] = []
+    
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
 
@@ -33,18 +37,22 @@ struct RecipesListView: View {
                         ProgressView()
                             .padding(.top, 40)
 
-                    } else if let errorText {
+                    } else if let errorText = errorText {
 
-                        errorView(errorText)
+                        errorView(errorText: errorText)
 
                     } else if items.isEmpty {
 
-                        emptyView
+                        emptyView()
 
                     } else {
 
                         recipesList
                     }
+                    
+                    // Кнопка управления удалением - всегда внизу
+                    deleteManagementButton
+                        .padding(.top, 20)
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 40)
@@ -52,38 +60,132 @@ struct RecipesListView: View {
         }
         .navigationTitle(category.displayName)
         .navigationBarTitleDisplayMode(.inline)
-
         .navigationDestination(isPresented: surpriseBinding) {
             if let id = surpriseRecipeId {
                 RecipeDetailView(recipeId: id)
             }
         }
-
+        .alert("Удаление категории", isPresented: $showingDeleteAlert) {
+            Button("Отмена", role: .cancel) { }
+            Button("Удалить", role: .destructive) {
+                deleteCategory()
+            }
+        } message: {
+            Text("Вы уверены, что хотите удалить категорию «\(category.displayName)»?")
+        }
+        .sheet(isPresented: $showingDeleteManagement) { // Добавлено
+            DeleteManagementView()
+        }
         .onAppear {
             loadRecipes()
         }
-
         .onChange(of: filter30) { _, _ in
             loadRecipes()
         }
-        
         .onChange(of: sortByCalories) { _, newValue in
             if newValue {
                 sortRecipesByCalories()
             } else {
-                // Возвращаем оригинальный порядок
                 items = originalItems
             }
         }
     }
+    
+    // MARK: - Delete Management Button (новая кнопка)
+    
+    private var deleteManagementButton: some View {
+        Button {
+            showingDeleteManagement = true
+        } label: {
+            HStack {
+                Image(systemName: "trash")
+                Text("Управление удалением")
+            }
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(.regularMaterial)
+            .foregroundColor(.red)
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.red.opacity(0.3), lineWidth: 1)
+            )
+        }
+    }
+    
+    // MARK: - Delete Category Button
+    
+    private var deleteCategoryButton: some View {
+        Button(action: {
+            showingDeleteAlert = true
+        }) {
+            HStack {
+                if isDeleting {
+                    ProgressView()
+                        .tint(.red)
+                } else {
+                    Image(systemName: "trash")
+                }
+                Text("Удалить категорию")
+            }
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(.regularMaterial)
+            .foregroundColor(.red)
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.red.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .disabled(isDeleting)
+    }
+    
+    // MARK: - Delete Category Function
+    
+    private func deleteCategory() {
+        isDeleting = true
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                try DatabaseManager.shared.deleteCategory(id: category.id)
+                
+                DispatchQueue.main.async {
+                    isDeleting = false
+                    dismiss()
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    errorText = error.localizedDescription
+                    isDeleting = false
+                    showingDeleteAlert = false
+                }
+            }
+        }
+    }
+    
+    // MARK: - View Builders
+    
+    func errorView(errorText: String) -> some View {
+        Text(errorText)
+            .foregroundStyle(.red)
+            .padding(.top, 40)
+    }
+    
+    func emptyView() -> some View {
+        VStack(spacing: 20) {
+            Text("В этой категории нет рецептов")
+                .foregroundStyle(.secondary)
+                .padding(.top, 40)
+            
+            // Кнопка удаления пустой категории
+            deleteCategoryButton
+        }
+    }
 }
 
-////////////////////////////////////////////////////////////
 // MARK: Bindings
-////////////////////////////////////////////////////////////
-
 private extension RecipesListView {
-
     var surpriseBinding: Binding<Bool> {
         Binding(
             get: { surpriseRecipeId != nil },
@@ -92,15 +194,12 @@ private extension RecipesListView {
     }
 }
 
-////////////////////////////////////////////////////////////
 // MARK: Filters
-////////////////////////////////////////////////////////////
-
 private extension RecipesListView {
 
     var filtersRow: some View {
 
-        HStack(spacing: 36) {
+        HStack(spacing: 25) {
 
             filterButton(
                 image: "mouse_watch",
@@ -113,12 +212,11 @@ private extension RecipesListView {
             filterButton(
                 image: "mouse_cube",
                 title: "Сюрприз",
-                isActive: false // Сюрприз всегда яркий (неактивное состояние = яркий)
+                isActive: false
             ) {
                 surpriseMe()
             }
             
-            // Новая кнопка для сортировки по калориям
             filterButton(
                 image: "mouse_weight",
                 title: "Калории",
@@ -128,6 +226,7 @@ private extension RecipesListView {
             }
         }
         .padding(.top, 16)
+        .frame(maxWidth: .infinity)
     }
 
     func filterButton(
@@ -144,22 +243,20 @@ private extension RecipesListView {
                 Image(image)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 90, height: 90)
+                    .frame(width: 110, height: 110)
 
                 Text(title)
-                    .font(.caption)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
             }
+            .frame(maxWidth: .infinity)
         }
         .buttonStyle(BounceButtonStyle())
-        // Инвертируем логику: яркие по умолчанию, бледнеют при активации
         .opacity(isActive ? 0.6 : 1.0)
     }
 }
 
-////////////////////////////////////////////////////////////
 // MARK: List
-////////////////////////////////////////////////////////////
-
 private extension RecipesListView {
 
     var recipesList: some View {
@@ -167,43 +264,22 @@ private extension RecipesListView {
         LazyVStack(spacing: 16) {
 
             ForEach(items) { recipe in
-
                 NavigationLink {
-
                     RecipeDetailView(recipeId: recipe.id)
-
                 } label: {
-
                     RecipeCardRow(recipe: recipe)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 20)
+                        .completeCardAnimation(glowColor: .orange)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PlainButtonStyle())
             }
         }
         .padding(.top, 8)
     }
-
-    var emptyView: some View {
-
-        Text("Нет рецептов")
-            .padding(.top, 40)
-    }
-
-    func errorView(_ text: String) -> some View {
-
-        Text(text)
-            .foregroundStyle(.red)
-            .padding(.top, 40)
-    }
 }
 
-////////////////////////////////////////////////////////////
 // MARK: Data
-////////////////////////////////////////////////////////////
-
-////////////////////////////////////////////////////////////
-// MARK: Data
-////////////////////////////////////////////////////////////
-
 private extension RecipesListView {
 
     func loadRecipes() {
@@ -223,28 +299,25 @@ private extension RecipesListView {
 
                 DispatchQueue.main.async {
 
-                    // ТЕСТ: добавляем случайные калории для проверки отображения
                     let testRecipes = recipes.map { recipe -> RecipeRow in
-                        // Создаем новый рецепт с тестовыми калориями
                         return RecipeRow(
                             id: recipe.id,
                             title: recipe.title,
                             timeMinutes: recipe.timeMinutes,
                             difficulty: recipe.difficulty,
-                            calories: Int.random(in: 100...800) // Случайные калории
+                            calories: Int.random(in: 100...800)
                         )
                     }
                     
                     self.originalItems = testRecipes
                     self.items = testRecipes
                     
-                    // ОТЛАДКА: посмотрим, есть ли калории
                     for recipe in testRecipes {
                         print("Рецепт: \(recipe.title), калории: \(recipe.calories?.description ?? "nil")")
                     }
                     
                     if self.sortByCalories {
-                        self.sortRecipesByCalories() // Теперь这个方法 существует
+                        self.sortRecipesByCalories()
                     }
                     
                     self.isLoading = false
@@ -260,12 +333,11 @@ private extension RecipesListView {
         }
     }
     
-    // Добавляем метод сортировки по калориям
     func sortRecipesByCalories() {
         items.sort { recipe1, recipe2 in
             let calories1 = recipe1.calories ?? 0
             let calories2 = recipe2.calories ?? 0
-            return calories1 < calories2 // от меньшего к большему
+            return calories1 < calories2
         }
     }
 
@@ -277,14 +349,7 @@ private extension RecipesListView {
     }
 }
 
-////////////////////////////////////////////////////////////
 // MARK: Card
-////////////////////////////////////////////////////////////
-
-////////////////////////////////////////////////////////////
-// MARK: Card
-////////////////////////////////////////////////////////////
-
 private struct RecipeCardRow: View {
 
     let recipe: RecipeRow
@@ -297,23 +362,24 @@ private struct RecipeCardRow: View {
 
                 Text(recipe.title)
                     .font(.headline)
+                    .foregroundStyle(.primary)
 
                 HStack(spacing: 10) {
+
                     Text(recipe.timeText)
+
+                    if !recipe.timeText.isEmpty {
+                        Text("•")
+                    }
+
+                    Text(recipe.difficultyText)
                     
                     if let calories = recipe.calories, calories > 0 {
                         Text("•")
                         Text("\(calories) ккал")
                             .foregroundStyle(.orange)
                     }
-                    
-                    if !recipe.timeText.isEmpty && !recipe.difficultyText.isEmpty {
-                        Text("•")
-                    }
-                    
-                    Text(recipe.difficultyText)
                 }
-                
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             }
@@ -324,29 +390,30 @@ private struct RecipeCardRow: View {
                 .foregroundStyle(.secondary)
                 .font(.caption)
         }
-        .padding(18)
+        .padding(20)
         .background(
-            RoundedRectangle(cornerRadius: 22)
+            RoundedRectangle(cornerRadius: 24)
                 .fill(.ultraThinMaterial)
+                .opacity(0.7)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
         )
         .shadow(
-            color: .black.opacity(0.12),
-            radius: 12,
-            y: 6
+            color: .black.opacity(0.1),
+            radius: 15,
+            x: 0,
+            y: 8
         )
     }
 }
-////////////////////////////////////////////////////////////
+
 // MARK: Button animation
-////////////////////////////////////////////////////////////
-
 struct BounceButtonStyle: ButtonStyle {
-
     func makeBody(configuration: Configuration) -> some View {
-
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.9 : 1)
             .animation(.spring(response: 0.25), value: configuration.isPressed)
     }
-    
 }
