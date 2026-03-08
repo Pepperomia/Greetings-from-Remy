@@ -62,6 +62,12 @@ struct RecipeRow: Identifiable {
         }
     }
     
+    // Добавляем caloriesText
+    var caloriesText: String? {
+        guard let calories = calories, calories > 0 else { return nil }
+        return "\(calories) ккал"
+    }
+    
     // Инициализатор для searchRecipes
     init(id: Int, title: String, timeMinutes: Int, difficulty: String, calories: Int? = nil) {
         self.id = id

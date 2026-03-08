@@ -222,7 +222,6 @@ final class DatabaseManager {
         }
     }
 
-    // Добавьте этот метод, если его нет:
     func fetchAllCuisines() throws -> [CuisineRow] {
         return try fetchCuisines()
     }
@@ -408,38 +407,44 @@ final class DatabaseManager {
     // MARK: RECIPES BY CATEGORY
 
     func fetchRecipes(categoryId: Int, maxMinutes: Int? = nil) throws -> [RecipeRow] {
-
         var sql = """
         SELECT id, title, time_minutes, difficulty, calories
         FROM recipes
         WHERE category_id = ? AND is_archived = 0
         """
-
+        
         var params: [Any] = [categoryId]
-
+        
         if let maxMinutes {
             sql += " AND time_minutes <= ?"
             params.append(maxMinutes)
         }
-
+        
         sql += " ORDER BY title"
-
+        
         return try runQuery(sql, parameters: params) { row in
-
-            RecipeRow(
-                id: row[0] as? Int ?? 0,
-                title: row[1] as? String ?? "",
-                timeMinutes: row[2] as? Int ?? 0,
-                difficulty: row[3] as? String ?? "medium",
-                calories: row[4] as? Int
+            let id = row[0] as? Int ?? 0
+            let title = row[1] as? String ?? ""
+            let timeMinutes = row[2] as? Int ?? 0
+            let difficulty = row[3] as? String ?? "medium"
+            
+            // Получаем Double и конвертируем в Int
+            let caloriesValue = row[4] as? Double
+            let calories = caloriesValue.map { Int($0) }
+            
+            return RecipeRow(
+                id: id,
+                title: title,
+                timeMinutes: timeMinutes,
+                difficulty: difficulty,
+                calories: calories
             )
         }
     }
-
+    
     // MARK: SEARCH
 
     func searchRecipes(query: String) throws -> [RecipeRow] {
-
         let sql = """
         SELECT DISTINCT r.id, r.title, r.time_minutes, r.difficulty, r.calories
         FROM recipes r
@@ -450,22 +455,117 @@ final class DatabaseManager {
         ORDER BY r.title
         LIMIT 200
         """
-
+        
         return try runQuery(
             sql,
             parameters: ["%\(query)%", "%\(query)%"]
         ) { row in
-
-            RecipeRow(
-                id: row[0] as? Int ?? 0,
-                title: row[1] as? String ?? "",
-                timeMinutes: row[2] as? Int ?? 0,
-                difficulty: row[3] as? String ?? "medium",
-                calories: row[4] as? Int ?? 0
+            let id = row[0] as? Int ?? 0
+            let title = row[1] as? String ?? ""
+            let timeMinutes = row[2] as? Int ?? 0
+            let difficulty = row[3] as? String ?? "medium"
+            
+            // Получаем Double и конвертируем в Int
+            let caloriesValue = row[4] as? Double
+            let calories = caloriesValue.map { Int($0) }
+            
+            return RecipeRow(
+                id: id,
+                title: title,
+                timeMinutes: timeMinutes,
+                difficulty: difficulty,
+                calories: calories
+            )
+        }
+    }
+    
+    func searchRecipesByIngredients(_ ingredients: [String]) throws -> [RecipeRow] {
+        guard !ingredients.isEmpty else { return [] }
+        
+        try open()
+        
+        var sql = """
+        SELECT r.id, r.title, r.time_minutes, r.difficulty, r.calories
+        FROM recipes r
+        WHERE r.is_archived = 0
+        """
+        
+        for _ in ingredients {
+            sql += """
+            \nAND r.id IN (
+                SELECT ri.recipe_id 
+                FROM recipe_ingredients ri
+                JOIN ingredients i ON i.id = ri.ingredient_id
+                WHERE i.name LIKE ?
+            )
+            """
+        }
+        
+        sql += "\nORDER BY r.title LIMIT 200"
+        
+        let parameters = ingredients.map { "%\($0)%" }
+        
+        return try runQuery(sql, parameters: parameters) { row in
+            let id = row[0] as? Int ?? 0
+            let title = row[1] as? String ?? ""
+            let timeMinutes = row[2] as? Int ?? 0
+            let difficulty = row[3] as? String ?? "medium"
+            
+            // Получаем Double и конвертируем в Int
+            let caloriesValue = row[4] as? Double
+            let calories = caloriesValue.map { Int($0) }
+            
+            return RecipeRow(
+                id: id,
+                title: title,
+                timeMinutes: timeMinutes,
+                difficulty: difficulty,
+                calories: calories
             )
         }
     }
 
+    func searchIngredientSuggestions(prefix: String) throws -> [String] {
+        let sql = """
+        SELECT DISTINCT i.name
+        FROM ingredients i
+        WHERE i.name LIKE ?
+        ORDER BY 
+            CASE 
+                WHEN i.name LIKE ? THEN 1
+                WHEN i.name LIKE ? THEN 2
+                ELSE 3
+            END,
+            i.name
+        LIMIT 10
+        """
+        
+        let pattern = "%\(prefix)%"
+        let exactPattern = "\(prefix)%"
+        
+        return try runQuery(
+            sql,
+            parameters: [pattern, exactPattern, pattern]
+        ) { row in
+            row[0] as? String ?? ""
+        }.filter { !$0.isEmpty }
+    }
+
+    func getPopularIngredients(limit: Int = 10) throws -> [String] {
+        let sql = """
+        SELECT i.name, COUNT(*) as usage_count
+        FROM ingredients i
+        JOIN recipe_ingredients ri ON ri.ingredient_id = i.id
+        GROUP BY i.id, i.name
+        ORDER BY usage_count DESC, i.name
+        LIMIT ?
+        """
+        
+        return try runQuery(sql, parameters: [limit]) { row in
+            row[0] as? String ?? ""
+        }.filter { !$0.isEmpty }
+    }
+    
     // MARK: RECIPE DETAIL
 
     func fetchRecipeDetail(recipeId: Int) throws -> RecipeDetail {

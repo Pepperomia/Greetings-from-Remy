@@ -8,7 +8,7 @@ struct RecipesListView: View {
     @State private var errorText: String?
     @State private var showingDeleteAlert = false
     @State private var isDeleting = false
-    @State private var showingDeleteManagement = false // Добавлено
+    @State private var showingDeleteManagement = false
 
     @State private var filter30 = false
     @State private var sortByCalories = false
@@ -73,7 +73,7 @@ struct RecipesListView: View {
         } message: {
             Text("Вы уверены, что хотите удалить категорию «\(category.displayName)»?")
         }
-        .sheet(isPresented: $showingDeleteManagement) { // Добавлено
+        .sheet(isPresented: $showingDeleteManagement) {
             DeleteManagementView()
         }
         .onAppear {
@@ -91,7 +91,7 @@ struct RecipesListView: View {
         }
     }
     
-    // MARK: - Delete Management Button (новая кнопка)
+    // MARK: - Delete Management Button
     
     private var deleteManagementButton: some View {
         Button {
@@ -283,38 +283,38 @@ private extension RecipesListView {
 private extension RecipesListView {
 
     func loadRecipes() {
-
         isLoading = true
+        print("🔄 Загрузка рецептов для категории: \(category.name)")
 
         DispatchQueue.global(qos: .userInitiated).async {
-
             do {
-
                 let maxMinutes = filter30 ? 30 : nil
+                print("🔄 Фильтр до 30 мин: \(maxMinutes != nil)")
 
                 let recipes = try DatabaseManager.shared.fetchRecipes(
                     categoryId: category.id,
                     maxMinutes: maxMinutes
                 )
+                
+                print("🔄 Получено рецептов из БД: \(recipes.count)")
 
                 DispatchQueue.main.async {
-
-                    let testRecipes = recipes.map { recipe -> RecipeRow in
-                        return RecipeRow(
-                            id: recipe.id,
-                            title: recipe.title,
-                            timeMinutes: recipe.timeMinutes,
-                            difficulty: recipe.difficulty,
-                            calories: Int.random(in: 100...800)
-                        )
+                    // Используем реальные данные из базы без изменений
+                    self.originalItems = recipes
+                    self.items = recipes
+                    
+                    // Подробная отладка для каждого рецепта
+                    for recipe in recipes {
+                        print("📝 Рецепт: '\(recipe.title)'")
+                        print("   - время: \(recipe.timeMinutes) мин")
+                        print("   - сложность: \(recipe.difficulty)")
+                        print("   - калории из БД: \(recipe.calories?.description ?? "nil")")
+                        print("   - калории для отображения: \(recipe.calories != nil && recipe.calories! > 0 ? "\(recipe.calories!) ккал" : "нет данных")")
                     }
                     
-                    self.originalItems = testRecipes
-                    self.items = testRecipes
-                    
-                    for recipe in testRecipes {
-                        print("Рецепт: \(recipe.title), калории: \(recipe.calories?.description ?? "nil")")
-                    }
+                    // Проверяем, есть ли вообще рецепты с калориями
+                    let recipesWithCalories = recipes.filter { $0.calories != nil && $0.calories! > 0 }
+                    print("📊 Рецептов с калориями: \(recipesWithCalories.count) из \(recipes.count)")
                     
                     if self.sortByCalories {
                         self.sortRecipesByCalories()
@@ -322,9 +322,8 @@ private extension RecipesListView {
                     
                     self.isLoading = false
                 }
-
             } catch {
-
+                print("❌ Ошибка загрузки: \(error)")
                 DispatchQueue.main.async {
                     self.errorText = error.localizedDescription
                     self.isLoading = false
@@ -339,13 +338,13 @@ private extension RecipesListView {
             let calories2 = recipe2.calories ?? 0
             return calories1 < calories2
         }
+        print("📊 Рецепты отсортированы по калориям")
     }
 
     func surpriseMe() {
-
         guard !items.isEmpty else { return }
-
         surpriseRecipeId = items.randomElement()?.id
+        print("🎲 Случайный рецепт: id \(surpriseRecipeId ?? 0)")
     }
 }
 
@@ -355,37 +354,54 @@ private struct RecipeCardRow: View {
     let recipe: RecipeRow
 
     var body: some View {
-
         HStack {
-
             VStack(alignment: .leading, spacing: 8) {
-
                 Text(recipe.title)
                     .font(.headline)
                     .foregroundStyle(.primary)
+                    .lineLimit(2)
 
-                HStack(spacing: 10) {
-
-                    Text(recipe.timeText)
-
-                    if !recipe.timeText.isEmpty {
-                        Text("•")
+                HStack(spacing: 8) {
+                    // Время
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .font(.caption2)
+                        Text(recipe.timeText)
+                            .font(.caption)
                     }
-
-                    Text(recipe.difficultyText)
                     
+                    // Разделитель
+                    Text("•")
+                        .foregroundStyle(.secondary)
+                    
+                    // Сложность с иконкой (исправлено на доступные иконки)
+                    HStack(spacing: 4) {
+                        Image(systemName: difficultyIcon)
+                            .font(.caption2)
+                        Text(recipe.difficultyText)
+                            .font(.caption)
+                    }
+                    
+                    // Калории (если есть)
                     if let calories = recipe.calories, calories > 0 {
                         Text("•")
-                        Text("\(calories) ккал")
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.secondary)
+                        
+                        HStack(spacing: 4) {
+                            Image(systemName: "flame")
+                                .font(.caption2)
+                                .foregroundStyle(caloriesColor(calories))
+                            Text("\(calories) ккал")
+                                .font(.caption)
+                                .foregroundStyle(caloriesColor(calories))
+                        }
                     }
                 }
-                .font(.subheadline)
                 .foregroundStyle(.secondary)
             }
-
+            
             Spacer()
-
+            
             Image(systemName: "chevron.right")
                 .foregroundStyle(.secondary)
                 .font(.caption)
@@ -407,13 +423,22 @@ private struct RecipeCardRow: View {
             y: 8
         )
     }
-}
-
-// MARK: Button animation
-struct BounceButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.9 : 1)
-            .animation(.spring(response: 0.25), value: configuration.isPressed)
+    
+    // Иконка сложности (исправлено на доступные иконки)
+    private var difficultyIcon: String {
+        switch recipe.difficulty {
+        case "easy": return "hand.thumbsup"  // было face.smiling
+        case "hard": return "exclamationmark.triangle"  // было face.dashed
+        default: return "equal"  // было face.neutral
+        }
+    }
+    
+    // Цвет калорий в зависимости от значения
+    private func caloriesColor(_ calories: Int) -> Color {
+        switch calories {
+        case 0..<200: return .green
+        case 200..<400: return .orange
+        default: return .red
+        }
     }
 }
