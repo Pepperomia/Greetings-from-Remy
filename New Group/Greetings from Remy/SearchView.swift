@@ -14,6 +14,10 @@ struct SearchView: View {
     @State private var sortByCalories = false
     @State private var originalResults: [RecipeRow] = []
     
+    // MARK: - Фильтр по кухням
+    @State private var cuisines: [CuisineRow] = []
+    @State private var selectedCuisineId: Int?
+    
     // MARK: - Поиск по ингредиентам
     @State private var searchMode: SearchMode = .name
     @State private var selectedIngredients: [String] = []
@@ -39,88 +43,94 @@ struct SearchView: View {
     // MARK: - Body
     
     var body: some View {
-        ZStack {
-            AppBackground()
-            
-            ScrollView {
-                VStack(spacing: 24) {
-                    
-                    // Search Card
-                    VStack(spacing: 16) {
-                        // Mode Picker
-                        Picker("Режим поиска", selection: $searchMode) {
-                            ForEach(SearchMode.allCases, id: \.self) { mode in
-                                Text(mode.rawValue).tag(mode)
+        NavigationStack {
+            ZStack {
+                AppBackground()
+                
+                ScrollView {
+                    VStack(spacing: 20) {
+                        
+                        // Search Card
+                        VStack(spacing: 16) {
+                            // Mode Picker
+                            Picker("Режим поиска", selection: $searchMode) {
+                                ForEach(SearchMode.allCases, id: \.self) { mode in
+                                    Text(mode.rawValue).tag(mode)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .onChange(of: searchMode) { _, _ in
+                                clearSearch()
+                            }
+                            
+                            // Search Field
+                            if searchMode == .name {
+                                TextField("борщ, курица, сливки…", text: $query)
+                                    .textFieldStyle(.plain)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .fill(.ultraThinMaterial)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                    )
+                                    .onChange(of: query) { _, _ in
+                                        debounceSearch()
+                                    }
+                                    .onSubmit {
+                                        debounceSearch()
+                                    }
+                            } else {
+                                ingredientsSearchField
                             }
                         }
-                        .pickerStyle(.segmented)
-                        .onChange(of: searchMode) { _, _ in
-                            clearSearch()
-                        }
+                        .padding(20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 24)
+                                .fill(.regularMaterial)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 24)
+                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                        )
+                        .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 8)
                         
-                        // Search Field
-                        if searchMode == .name {
-                            TextField("борщ, курица, сливки…", text: $query)
-                                .textFieldStyle(.plain)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .fill(.ultraThinMaterial)
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                                )
-                                .onChange(of: query) { _, _ in
-                                    debounceSearch()
-                                }
-                                .onSubmit {
-                                    debounceSearch()
-                                }
-                        } else {
-                            ingredientsSearchField
+                        // Filters Row
+                        filtersRow
+                            .padding(.horizontal, 8)
+                        
+                        // Results
+                        if isSearching {
+                            ProgressView()
+                                .padding(.top, 40)
+                        } else if let errorText {
+                            errorView(errorText: errorText)
+                                .padding(.horizontal, 8)
+                        } else if results.isEmpty && hasSearchQuery {
+                            emptyView
+                                .padding(.horizontal, 8)
+                        } else if !results.isEmpty {
+                            resultsSection
+                                .padding(.horizontal, 8)
                         }
                     }
-                    .padding(20)
-                    .background(
-                        RoundedRectangle(cornerRadius: 24)
-                            .fill(.regularMaterial)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 24)
-                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 8)
-                    
-                    // Filters Row
-                    filtersRow
-                    
-                    // Results
-                    if isSearching {
-                        ProgressView()
-                            .padding(.top, 40)
-                    } else if let errorText {
-                        errorView(errorText: errorText)
-                    } else if results.isEmpty && hasSearchQuery {
-                        emptyView
-                    } else if !results.isEmpty {
-                        resultsSection
-                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 16)
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 40)
             }
-        }
-        .navigationTitle("Поиск")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(isPresented: surpriseBinding) {
-            if let id = surpriseRecipeId {
-                RecipeDetailView(recipeId: id)
+            .navigationTitle("Поиск")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(isPresented: surpriseBinding) {
+                if let id = surpriseRecipeId {
+                    RecipeDetailView(recipeId: id)
+                }
             }
         }
         .onAppear {
-            loadPopularIngredients()
+            loadInitialData()
         }
         .onChange(of: filter30) { _, _ in
             applyFilters()
@@ -131,6 +141,9 @@ struct SearchView: View {
             } else {
                 results = originalResults
             }
+        }
+        .onChange(of: selectedCuisineId) { _, _ in
+            applyFilters()
         }
     }
     
@@ -149,6 +162,45 @@ struct SearchView: View {
             get: { surpriseRecipeId != nil },
             set: { if !$0 { surpriseRecipeId = nil } }
         )
+    }
+    
+    private var selectedCuisineName: String {
+        guard let id = selectedCuisineId,
+              let cuisine = cuisines.first(where: { $0.id == id }) else {
+            return "Все кухни"
+        }
+        return cuisine.name
+    }
+    
+    // MARK: - Load Initial Data
+    
+    private func loadInitialData() {
+        DispatchQueue.global(qos: .utility).async { [self] in
+            self.loadPopularIngredientsSync()
+            self.loadCuisinesSync()
+        }
+    }
+    
+    private func loadPopularIngredientsSync() {
+        do {
+            let popular = try DatabaseManager.shared.getPopularIngredients(limit: 15)
+            DispatchQueue.main.async {
+                self.popularIngredients = popular
+            }
+        } catch {
+            print("Ошибка загрузки популярных ингредиентов: \(error)")
+        }
+    }
+    
+    private func loadCuisinesSync() {
+        do {
+            let fetched = try DatabaseManager.shared.fetchAllCuisines()
+            DispatchQueue.main.async {
+                self.cuisines = fetched
+            }
+        } catch {
+            print("Ошибка загрузки кухонь: \(error)")
+        }
     }
     
     // MARK: - Ingredients Search Field
@@ -320,7 +372,7 @@ struct SearchView: View {
     private func loadIngredientSuggestions(for prefix: String) {
         guard prefix.count >= 1 else { return }
         
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .utility).async { [self] in
             do {
                 let suggestions = try DatabaseManager.shared.searchIngredientSuggestions(prefix: prefix)
                 DispatchQueue.main.async {
@@ -328,20 +380,9 @@ struct SearchView: View {
                 }
             } catch {
                 print("Ошибка загрузки подсказок: \(error)")
-                self.ingredientSuggestions = []
-            }
-        }
-    }
-    
-    private func loadPopularIngredients() {
-        DispatchQueue.global(qos: .background).async {
-            do {
-                let popular = try DatabaseManager.shared.getPopularIngredients(limit: 15)
                 DispatchQueue.main.async {
-                    self.popularIngredients = popular
+                    self.ingredientSuggestions = []
                 }
-            } catch {
-                print("Ошибка загрузки популярных ингредиентов: \(error)")
             }
         }
     }
@@ -349,7 +390,7 @@ struct SearchView: View {
     // MARK: - Filters
     
     private var filtersRow: some View {
-        HStack(spacing: 25) {
+        HStack(spacing: 12) {
             
             filterButton(
                 image: "mouse_watch",
@@ -367,6 +408,8 @@ struct SearchView: View {
                 surpriseMe()
             }
             
+            cuisineMenuButton
+            
             filterButton(
                 image: "mouse_weight",
                 title: "Калории",
@@ -375,7 +418,7 @@ struct SearchView: View {
                 sortByCalories.toggle()
             }
         }
-        .padding(.top, 16)
+        .padding(.top, 8)
         .frame(maxWidth: .infinity)
     }
     
@@ -386,20 +429,69 @@ struct SearchView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            VStack(spacing: 4) {
                 Image(image)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 110, height: 110)
+                    .frame(width: 80, height: 80)
                 
                 Text(title)
-                    .font(.subheadline)
+                    .font(.caption)
                     .fontWeight(.medium)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(height: 32)
             }
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(BounceButtonStyle())
         .opacity(isActive ? 0.6 : 1.0)
+    }
+    
+    // MARK: - Cuisine Menu Button
+    
+    private var cuisineMenuButton: some View {
+        Menu {
+            Button("Все кухни") {
+                selectedCuisineId = nil
+            }
+            
+            if !cuisines.isEmpty {
+                Divider()
+                ForEach(cuisines) { cuisine in
+                    Button(cuisine.name) {
+                        selectedCuisineId = cuisine.id
+                    }
+                }
+            }
+        } label: {
+            VStack(spacing: 4) {
+                ZStack(alignment: .bottomTrailing) {
+                    Image("mouse_world")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 80, height: 80)
+                    
+                    if selectedCuisineId != nil {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.mint)
+                            .background(Circle().fill(.white))
+                            .offset(x: 5, y: 5)
+                    }
+                }
+                
+                Text(selectedCuisineName)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(height: 32)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(BounceButtonStyle())
     }
     
     private func surpriseMe() {
@@ -410,27 +502,27 @@ struct SearchView: View {
     // MARK: - Results Section
     
     private var resultsSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             // Заголовок по центру
             HStack {
                 Spacer()
                 
-                VStack(spacing: 4) {
+                VStack(spacing: 2) {
                     Text("Результаты")
-                        .font(.title2)
+                        .font(.title3)
                         .fontWeight(.semibold)
                     
                     Text("\(results.count) \(recipeWord(for: results.count))")
-                        .font(.subheadline)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 
                 Spacer()
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 4)
             
             // Карточки рецептов
-            LazyVStack(spacing: 16) {
+            LazyVStack(spacing: 12) {
                 ForEach(results) { recipe in
                     NavigationLink {
                         RecipeDetailView(recipeId: recipe.id)
@@ -460,22 +552,26 @@ struct SearchView: View {
     // MARK: - Empty View & Error View
     
     private var emptyView: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             Image(systemName: searchMode == .name ? "magnifyingglass" : "carrot")
-                .font(.system(size: 50))
+                .font(.system(size: 40))
                 .foregroundStyle(.secondary)
             
             Text(searchMode == .name ? "Ничего не найдено" : "Нет рецептов с такими ингредиентами")
+                .font(.headline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
-        .padding(.top, 40)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
     }
     
     private func errorView(errorText: String) -> some View {
         Text(errorText)
             .foregroundStyle(.red)
-            .padding(.top, 40)
+            .font(.caption)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 20)
     }
     
     // MARK: - Search Logic
@@ -488,6 +584,7 @@ struct SearchView: View {
         originalResults = []
         filter30 = false
         sortByCalories = false
+        selectedCuisineId = nil
         showSuggestions = false
         searchCache.removeAll()
         
@@ -497,8 +594,8 @@ struct SearchView: View {
     private func debounceSearch() {
         searchTask?.cancel()
         
-        let task = DispatchWorkItem {
-            runSearch()
+        let task = DispatchWorkItem { [self] in
+            self.runSearch()
         }
         
         searchTask = task
@@ -531,12 +628,13 @@ struct SearchView: View {
             }
         }
         
-        let cacheKey = "\(searchMode)-\(trimmedQuery)-\(selectedIngredients.joined(separator: ","))"
+        let cacheKey = "\(searchMode)-\(trimmedQuery)-\(selectedIngredients.joined(separator: ","))-\(selectedCuisineId ?? 0)"
         
         if let cached = searchCache[cacheKey] {
             DispatchQueue.main.async {
                 results = cached
                 originalResults = cached
+                applyFilters()
             }
             return
         }
@@ -544,31 +642,35 @@ struct SearchView: View {
         isSearching = true
         errorText = nil
         
-        DispatchQueue.global(qos: .userInitiated).async {
-            
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
             do {
                 let found: [RecipeRow]
                 
                 if searchMode == .name {
-                    found = try DatabaseManager.shared.searchRecipes(query: trimmedQuery)
+                    // Передаем selectedCuisineId в метод поиска
+                    found = try DatabaseManager.shared.searchRecipes(
+                        query: trimmedQuery,
+                        cuisineId: selectedCuisineId
+                    )
                 } else {
-                    found = try DatabaseManager.shared.searchRecipesByIngredients(selectedIngredients)
+                    // Передаем selectedCuisineId в метод поиска по ингредиентам
+                    found = try DatabaseManager.shared.searchRecipesByIngredients(
+                        selectedIngredients,
+                        cuisineId: selectedCuisineId
+                    )
                 }
                 
                 DispatchQueue.main.async {
-                    
-                    searchCache[cacheKey] = found
-                    originalResults = found
-                    
-                    applyFilters()
-                    
-                    isSearching = false
+                    self.searchCache[cacheKey] = found
+                    self.originalResults = found
+                    self.applyFilters()
+                    self.isSearching = false
                 }
                 
             } catch {
                 DispatchQueue.main.async {
-                    errorText = error.localizedDescription
-                    isSearching = false
+                    self.errorText = error.localizedDescription
+                    self.isSearching = false
                 }
             }
         }
@@ -579,6 +681,7 @@ struct SearchView: View {
         
         var filtered = originalResults
         
+        // Фильтр по времени
         if filter30 {
             filtered = filtered.filter { $0.timeMinutes <= 30 }
         }
@@ -616,49 +719,45 @@ private struct ImprovedRecipeCardRow: View {
     
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(recipe.title)
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                 
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     // Время
-                    HStack(spacing: 4) {
+                    HStack(spacing: 2) {
                         Image(systemName: "clock")
                             .font(.caption2)
                         Text(recipe.timeText)
-                            .font(.caption)
+                            .font(.caption2)
                     }
                     
-                    // Калории - показываем реальные данные
+                    // Калории
                     if let calories = recipe.calories, calories > 0 {
                         Text("•")
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                         
-                        HStack(spacing: 4) {
+                        HStack(spacing: 2) {
                             Image(systemName: "flame")
                                 .font(.caption2)
                                 .foregroundStyle(caloriesColor)
                             Text("\(calories) ккал")
-                                .font(.caption)
+                                .font(.caption2)
                                 .foregroundStyle(caloriesColor)
                         }
-                    } else if let calories = recipe.calories, calories == 0 {
-                        Text("•")
-                            .foregroundStyle(.secondary)
-                        Text("0 ккал")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
                     
                     // Сложность
                     if !recipe.difficultyText.isEmpty {
                         Text("•")
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                         
                         Text(recipe.difficultyText)
-                            .font(.caption)
+                            .font(.caption2)
                     }
                 }
                 .foregroundStyle(.secondary)
@@ -668,23 +767,23 @@ private struct ImprovedRecipeCardRow: View {
             
             Image(systemName: "chevron.right")
                 .foregroundStyle(.secondary)
-                .font(.caption)
+                .font(.caption2)
         }
-        .padding(20)
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 24)
+            RoundedRectangle(cornerRadius: 20)
                 .fill(.ultraThinMaterial)
                 .opacity(0.7)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 24)
+            RoundedRectangle(cornerRadius: 20)
                 .stroke(Color.white.opacity(0.2), lineWidth: 1)
         )
         .shadow(
             color: .black.opacity(0.1),
-            radius: 15,
+            radius: 10,
             x: 0,
-            y: 8
+            y: 4
         )
     }
 }

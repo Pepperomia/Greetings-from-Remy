@@ -9,6 +9,9 @@ struct RecipeDetailView: View {
     @State private var errorText: String?
     @State private var showingDeleteAlert = false
     @State private var isDeleting = false
+    @State private var isFavorite = false
+    @State private var isUpdatingFavorite = false
+    @State private var showingEditSheet = false
     
     @Environment(\.dismiss) private var dismiss
     
@@ -36,10 +39,15 @@ struct RecipeDetailView: View {
                         instructionsSection(detail)
                             .padding(.horizontal, 20)
                         
-                        deleteButton
-                            .padding(.horizontal, 20)
-                            .padding(.top, 10)
-                            .padding(.bottom, 20)
+                        // Кнопки действий
+                        VStack(spacing: 12) {
+                            favoriteButton
+                            editButton
+                            deleteButton
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 10)
+                        .padding(.bottom, 20)
                     }
                     else if let errorText = errorText {
                         errorView(errorText)
@@ -63,21 +71,101 @@ struct RecipeDetailView: View {
         } message: {
             Text("Вы уверены, что хотите удалить рецепт «\(detail?.title ?? "")»?")
         }
+        .sheet(isPresented: $showingEditSheet) {
+            if let detail = detail {
+                EditRecipeView(
+                    recipeId: recipeId,
+                    recipe: detail,
+                    ingredients: ingredients,
+                    onSaved: {
+                        load()
+                    }
+                )
+            }
+        }
         .onAppear {
             load()
         }
     }
     
-    // MARK: DELETE BUTTON
+    // MARK: - Edit Button
+    
+    private var editButton: some View {
+        Button {
+            showingEditSheet = true
+        } label: {
+            HStack {
+                Image(systemName: "pencil")
+                    .font(.title3)
+                
+                Text("Редактировать")
+                    .font(.headline)
+            }
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.regularMaterial)
+            )
+            .foregroundColor(.blue)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+            )
+        }
+    }
+    
+    // MARK: - Favorite Button
+    
+    private var favoriteButton: some View {
+        Button {
+            toggleFavorite()
+        } label: {
+            HStack {
+                if isUpdatingFavorite {
+                    ProgressView()
+                        .tint(.yellow)
+                } else {
+                    Image(systemName: isFavorite ? "heart.fill" : "heart")
+                        .foregroundStyle(isFavorite ? .red : .secondary)
+                        .font(.title3)
+                }
+                
+                Text(isFavorite ? "В избранном" : "В избранное")
+                    .font(.headline)
+            }
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(
+                Group {
+                    if isFavorite {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(.red.opacity(0.15))
+                    } else {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(.regularMaterial)
+                    }
+                }
+            )
+            .foregroundColor(isFavorite ? .red : .primary)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(isFavorite ? Color.red.opacity(0.3) : Color.white.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .disabled(isUpdatingFavorite)
+    }
+    
+    // MARK: - Delete Button
     
     private var deleteButton: some View {
-        
         Button {
             showingDeleteAlert = true
         } label: {
             HStack {
                 if isDeleting {
-                    ProgressView().tint(.red)
+                    ProgressView()
+                        .tint(.red)
                 } else {
                     Image(systemName: "trash")
                 }
@@ -86,27 +174,48 @@ struct RecipeDetailView: View {
             }
             .frame(maxWidth: .infinity)
             .padding()
-            .background(.regularMaterial)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.regularMaterial)
+            )
             .foregroundColor(.red)
-            .cornerRadius(16)
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.red.opacity(0.3))
+                    .stroke(Color.red.opacity(0.3), lineWidth: 1)
             )
         }
         .disabled(isDeleting)
     }
     
-    // MARK: DELETE
+    // MARK: - Toggle Favorite
+    
+    private func toggleFavorite() {
+        isUpdatingFavorite = true
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let newValue = try DatabaseManager.shared.toggleFavorite(recipeId: recipeId)
+                
+                DispatchQueue.main.async {
+                    isFavorite = newValue
+                    isUpdatingFavorite = false
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    errorText = error.localizedDescription
+                    isUpdatingFavorite = false
+                }
+            }
+        }
+    }
+    
+    // MARK: - Delete Recipe
     
     private func deleteRecipe() {
-        
         isDeleting = true
         
         DispatchQueue.global(qos: .userInitiated).async {
-            
             do {
-                
                 try DatabaseManager.shared.deleteRecipe(id: recipeId)
                 
                 DispatchQueue.main.async {
@@ -115,7 +224,6 @@ struct RecipeDetailView: View {
                 }
                 
             } catch {
-                
                 DispatchQueue.main.async {
                     errorText = error.localizedDescription
                     isDeleting = false
@@ -131,7 +239,6 @@ struct RecipeDetailView: View {
         print("🔄 Загрузка рецепта id: \(recipeId)")
         
         DispatchQueue.global(qos: .userInitiated).async {
-            
             do {
                 // Загружаем детали рецепта
                 let detailData = try DatabaseManager.shared.fetchRecipeDetail(recipeId: recipeId)
@@ -141,14 +248,13 @@ struct RecipeDetailView: View {
                 let ingredientData = try DatabaseManager.shared.fetchIngredients(recipeId: recipeId)
                 print("✅ Загружено ингредиентов: \(ingredientData.count)")
                 
-                // Выводим каждый ингредиент для отладки
-                for ingredient in ingredientData {
-                    print("   📝 id: \(ingredient.id), \(ingredient.name) - '\(ingredient.amountText)'")
-                }
+                // Загружаем статус избранного
+                let userData = try DatabaseManager.shared.getUserRecipeData(recipeId: recipeId)
                 
                 DispatchQueue.main.async {
                     self.detail = detailData
                     self.ingredients = ingredientData
+                    self.isFavorite = userData.isFavorite
                 }
                 
             } catch {
@@ -160,16 +266,11 @@ struct RecipeDetailView: View {
             }
         }
     }
-}
-
-// MARK: HEADER
-
-private extension RecipeDetailView {
     
-    func header(_ detail: RecipeDetail) -> some View {
-        
+    // MARK: - Header
+    
+    private func header(_ detail: RecipeDetail) -> some View {
         VStack(spacing: 12) {
-            
             Text(detail.title)
                 .font(.largeTitle.bold())
                 .multilineTextAlignment(.center)
@@ -195,10 +296,8 @@ private extension RecipeDetailView {
         .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 8)
     }
     
-    func categoryCuisine(_ detail: RecipeDetail) -> some View {
-        
+    private func categoryCuisine(_ detail: RecipeDetail) -> some View {
         HStack(spacing: 8) {
-            
             Text(detail.categoryName)
                 .font(.caption.bold())
                 .padding(.horizontal, 14)
@@ -214,16 +313,11 @@ private extension RecipeDetailView {
             }
         }
     }
-}
-
-// MARK: NUTRITION
-
-private extension RecipeDetailView {
     
-    func nutritionInfo(_ detail: RecipeDetail) -> some View {
-        
+    // MARK: - Nutrition
+    
+    private func nutritionInfo(_ detail: RecipeDetail) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            
             sectionHeader("Пищевая ценность")
             
             if let calories = detail.calories {
@@ -236,7 +330,6 @@ private extension RecipeDetailView {
             }
             
             HStack(spacing: 12) {
-                
                 if let protein = detail.protein {
                     nutritionCompactRow(
                         title: "Белки",
@@ -274,10 +367,8 @@ private extension RecipeDetailView {
         .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 8)
     }
     
-    func nutritionRow(icon: String, iconColor: Color, title: String, value: String) -> some View {
-        
+    private func nutritionRow(icon: String, iconColor: Color, title: String, value: String) -> some View {
         HStack {
-            
             Image(systemName: icon)
                 .foregroundStyle(iconColor)
                 .frame(width: 24)
@@ -292,10 +383,8 @@ private extension RecipeDetailView {
         }
     }
     
-    func nutritionCompactRow(title: String, value: String, color: Color) -> some View {
-        
+    private func nutritionCompactRow(title: String, value: String, color: Color) -> some View {
         VStack(spacing: 6) {
-            
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -315,16 +404,11 @@ private extension RecipeDetailView {
                 .fill(.ultraThinMaterial)
         )
     }
-}
-
-// MARK: INGREDIENTS
-
-private extension RecipeDetailView {
     
-    var ingredientsSection: some View {
-        
+    // MARK: - Ingredients
+    
+    private var ingredientsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            
             sectionHeader("Ингредиенты")
             
             if ingredients.isEmpty {
@@ -334,32 +418,29 @@ private extension RecipeDetailView {
                     .padding(.vertical, 8)
             } else {
                 ForEach(ingredients) { ingredient in
-                    
-                    HStack(alignment: .center, spacing: 12) {
-                        
-                        // Маркер
-                        Text("•")
-                            .foregroundStyle(.secondary)
-                            .font(.title3)
-                            .frame(width: 15)
-                        
-                        // Название ингредиента
-                        Text(ingredient.name)
-                            .font(.body)
-                            .lineLimit(1)
-                        
-                        Spacer(minLength: 8)
-                        
-                        // Количество (всегда показываем, даже если пусто)
-                        Text(ingredient.amountText.isEmpty ? "—" : ingredient.amountText)
-                            .foregroundStyle(.secondary)
-                            .font(.subheadline)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule()
-                                    .fill(.ultraThinMaterial)
-                            )
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .top, spacing: 12) {
+                            Text("•")
+                                .foregroundStyle(.secondary)
+                                .font(.title3)
+                                .frame(width: 15, alignment: .leading)
+                            
+                            Text(ingredient.name)
+                                .font(.body)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            
+                            Text(ingredient.amountText.isEmpty ? "—" : ingredient.amountText)
+                                .foregroundStyle(.secondary)
+                                .font(.subheadline)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(.ultraThinMaterial)
+                                )
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
                     }
                     .padding(.vertical, 6)
                 }
@@ -376,16 +457,11 @@ private extension RecipeDetailView {
         )
         .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 8)
     }
-}
-
-// MARK: INSTRUCTIONS
-
-private extension RecipeDetailView {
     
-    func instructionsSection(_ detail: RecipeDetail) -> some View {
-        
+    // MARK: - Instructions
+    
+    private func instructionsSection(_ detail: RecipeDetail) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            
             sectionHeader("Приготовление")
             
             if detail.instructions.isEmpty {
@@ -410,8 +486,7 @@ private extension RecipeDetailView {
         .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 8)
     }
     
-    func formatSteps(_ text: String) -> String {
-        
+    private func formatSteps(_ text: String) -> String {
         let steps = text
             .components(separatedBy: "|")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -425,19 +500,15 @@ private extension RecipeDetailView {
         
         return text
     }
-}
-
-// MARK: HELPERS
-
-private extension RecipeDetailView {
     
-    func sectionHeader(_ title: String) -> some View {
+    // MARK: - Helpers
+    
+    private func sectionHeader(_ title: String) -> some View {
         Text(title)
             .font(.title3.bold())
     }
     
-    var loadingView: some View {
-        
+    private var loadingView: some View {
         VStack(spacing: 20) {
             ProgressView()
                 .scaleEffect(1.2)
@@ -449,8 +520,7 @@ private extension RecipeDetailView {
         .padding(.vertical, 40)
     }
     
-    func errorView(_ text: String) -> some View {
-        
+    private func errorView(_ text: String) -> some View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.largeTitle)

@@ -1,56 +1,61 @@
 import SwiftUI
 
 struct RecipesListView: View {
-
+    
     let category: CategoryRow
-
+    
     @State private var items: [RecipeRow] = []
     @State private var errorText: String?
     @State private var showingDeleteAlert = false
     @State private var isDeleting = false
     @State private var showingDeleteManagement = false
-
+    
     @State private var filter30 = false
     @State private var sortByCalories = false
     @State private var surpriseRecipeId: Int?
-
+    
+    // MARK: - Фильтр по кухням
+    @State private var cuisines: [CuisineRow] = []
+    @State private var selectedCuisineId: Int?
+    
     @State private var isLoading = false
     
     @State private var originalItems: [RecipeRow] = []
     
     @Environment(\.dismiss) private var dismiss
-
+    
     var body: some View {
-
+        
         ZStack {
-
+            
             AppBackground(.list)
-
+            
             ScrollView {
-
+                
                 VStack(spacing: 24) {
-
+                    
                     filtersRow
-
+                        .padding(.horizontal, 20)
+                    
                     if isLoading {
-
+                        
                         ProgressView()
                             .padding(.top, 40)
-
+                        
                     } else if let errorText = errorText {
-
+                        
                         errorView(errorText: errorText)
-
+                        
                     } else if items.isEmpty {
-
+                        
                         emptyView()
-
+                        
                     } else {
-
+                        
                         recipesList
                     }
                     
-                    // Кнопка управления удалением - всегда внизу
+                    // Кнопка управления удалением
                     deleteManagementButton
                         .padding(.top, 20)
                 }
@@ -77,7 +82,7 @@ struct RecipesListView: View {
             DeleteManagementView()
         }
         .onAppear {
-            loadRecipes()
+            loadInitialData()
         }
         .onChange(of: filter30) { _, _ in
             loadRecipes()
@@ -87,6 +92,68 @@ struct RecipesListView: View {
                 sortRecipesByCalories()
             } else {
                 items = originalItems
+            }
+        }
+        .onChange(of: selectedCuisineId) { _, _ in
+            applyCuisineFilter()
+        }
+    }
+    
+    // MARK: - Load Initial Data
+    
+    private func loadInitialData() {
+        isLoading = true
+        
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            // Сначала загружаем кухни
+            self.loadCuisinesSync()
+            
+            // Потом загружаем рецепты
+            self.loadRecipesSync()
+        }
+    }
+    
+    private func loadCuisinesSync() {
+        do {
+            let fetched = try DatabaseManager.shared.fetchAllCuisines()
+            DispatchQueue.main.async {
+                self.cuisines = fetched
+            }
+        } catch {
+            print("Ошибка загрузки кухонь: \(error)")
+        }
+    }
+    
+    private func loadRecipesSync() {
+        do {
+            let maxMinutes = filter30 ? 30 : nil
+            
+            let recipes = try DatabaseManager.shared.fetchRecipes(
+                categoryId: category.id,
+                maxMinutes: maxMinutes
+            )
+            
+            DispatchQueue.main.async {
+                self.originalItems = recipes
+                
+                // Выводим информацию о кухнях для отладки
+                for recipe in recipes {
+                    print("📝 Рецепт: '\(recipe.title)', cuisineId: \(recipe.cuisineId?.description ?? "nil")")
+                }
+                
+                // Применяем фильтр по кухне если выбран
+                self.applyCuisineFilter()
+                
+                if self.sortByCalories {
+                    self.sortRecipesByCalories()
+                }
+                
+                self.isLoading = false
+            }
+        } catch {
+            DispatchQueue.main.async {
+                self.errorText = error.localizedDescription
+                self.isLoading = false
             }
         }
     }
@@ -182,6 +249,25 @@ struct RecipesListView: View {
             deleteCategoryButton
         }
     }
+    
+    // MARK: - Apply Cuisine Filter
+    
+    private func applyCuisineFilter() {
+        guard !originalItems.isEmpty else { return }
+        
+        if let cuisineId = selectedCuisineId {
+            // Фильтруем рецепты по кухне
+            items = originalItems.filter { $0.cuisineId == cuisineId }
+            print("🎯 Отфильтровано по кухне \(cuisineId): \(items.count) рецептов")
+        } else {
+            items = originalItems
+            print("🎯 Показаны все рецепты: \(items.count)")
+        }
+        
+        if sortByCalories {
+            sortRecipesByCalories()
+        }
+    }
 }
 
 // MARK: Bindings
@@ -198,17 +284,17 @@ private extension RecipesListView {
 private extension RecipesListView {
 
     var filtersRow: some View {
-
-        HStack(spacing: 25) {
-
+        HStack(spacing: 20) {
+            
             filterButton(
                 image: "mouse_watch",
                 title: "до 30 мин",
                 isActive: filter30
             ) {
                 filter30.toggle()
+                loadRecipes()
             }
-
+            
             filterButton(
                 image: "mouse_cube",
                 title: "Сюрприз",
@@ -216,6 +302,9 @@ private extension RecipesListView {
             ) {
                 surpriseMe()
             }
+            
+            // Кнопка фильтра по кухням
+            cuisineMenuButton
             
             filterButton(
                 image: "mouse_weight",
@@ -226,7 +315,7 @@ private extension RecipesListView {
             }
         }
         .padding(.top, 16)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     func filterButton(
@@ -237,22 +326,77 @@ private extension RecipesListView {
     ) -> some View {
 
         Button(action: action) {
-
-            VStack(spacing: 8) {
-
+            VStack(spacing: 4) {
                 Image(image)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 110, height: 110)
-
+                    .frame(width: 80, height: 80)
+                
                 Text(title)
-                    .font(.subheadline)
+                    .font(.caption)
                     .fontWeight(.medium)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(height: 32)
             }
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(BounceButtonStyle())
         .opacity(isActive ? 0.6 : 1.0)
+    }
+    
+    // MARK: - Cuisine Menu Button
+    
+    private var cuisineMenuButton: some View {
+        Menu {
+            Button("Все кухни") {
+                selectedCuisineId = nil
+            }
+            
+            if !cuisines.isEmpty {
+                Divider()
+                ForEach(cuisines) { cuisine in
+                    Button(cuisine.name) {
+                        selectedCuisineId = cuisine.id
+                    }
+                }
+            }
+        } label: {
+            VStack(spacing: 4) {
+                ZStack(alignment: .bottomTrailing) {
+                    Image("mouse_world")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 80, height: 80)
+                    
+                    if selectedCuisineId != nil {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.mint)
+                            .background(Circle().fill(.white))
+                            .offset(x: 5, y: 5)
+                    }
+                }
+                
+                Text(selectedCuisineName)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(height: 32)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(BounceButtonStyle())
+    }
+    
+    private var selectedCuisineName: String {
+        guard let id = selectedCuisineId,
+              let cuisine = cuisines.first(where: { $0.id == id }) else {
+            return "Кухня"
+        }
+        return cuisine.name
     }
 }
 
@@ -284,51 +428,9 @@ private extension RecipesListView {
 
     func loadRecipes() {
         isLoading = true
-        print("🔄 Загрузка рецептов для категории: \(category.name)")
-
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let maxMinutes = filter30 ? 30 : nil
-                print("🔄 Фильтр до 30 мин: \(maxMinutes != nil)")
-
-                let recipes = try DatabaseManager.shared.fetchRecipes(
-                    categoryId: category.id,
-                    maxMinutes: maxMinutes
-                )
-                
-                print("🔄 Получено рецептов из БД: \(recipes.count)")
-
-                DispatchQueue.main.async {
-                    // Используем реальные данные из базы без изменений
-                    self.originalItems = recipes
-                    self.items = recipes
-                    
-                    // Подробная отладка для каждого рецепта
-                    for recipe in recipes {
-                        print("📝 Рецепт: '\(recipe.title)'")
-                        print("   - время: \(recipe.timeMinutes) мин")
-                        print("   - сложность: \(recipe.difficulty)")
-                        print("   - калории из БД: \(recipe.calories?.description ?? "nil")")
-                        print("   - калории для отображения: \(recipe.calories != nil && recipe.calories! > 0 ? "\(recipe.calories!) ккал" : "нет данных")")
-                    }
-                    
-                    // Проверяем, есть ли вообще рецепты с калориями
-                    let recipesWithCalories = recipes.filter { $0.calories != nil && $0.calories! > 0 }
-                    print("📊 Рецептов с калориями: \(recipesWithCalories.count) из \(recipes.count)")
-                    
-                    if self.sortByCalories {
-                        self.sortRecipesByCalories()
-                    }
-                    
-                    self.isLoading = false
-                }
-            } catch {
-                print("❌ Ошибка загрузки: \(error)")
-                DispatchQueue.main.async {
-                    self.errorText = error.localizedDescription
-                    self.isLoading = false
-                }
-            }
+        
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            self.loadRecipesSync()
         }
     }
     
@@ -374,7 +476,7 @@ private struct RecipeCardRow: View {
                     Text("•")
                         .foregroundStyle(.secondary)
                     
-                    // Сложность с иконкой (исправлено на доступные иконки)
+                    // Сложность
                     HStack(spacing: 4) {
                         Image(systemName: difficultyIcon)
                             .font(.caption2)
@@ -424,12 +526,12 @@ private struct RecipeCardRow: View {
         )
     }
     
-    // Иконка сложности (исправлено на доступные иконки)
+    // Иконка сложности
     private var difficultyIcon: String {
         switch recipe.difficulty {
-        case "easy": return "hand.thumbsup"  // было face.smiling
-        case "hard": return "exclamationmark.triangle"  // было face.dashed
-        default: return "equal"  // было face.neutral
+        case "easy": return "hand.thumbsup"
+        case "hard": return "exclamationmark.triangle"
+        default: return "equal"
         }
     }
     

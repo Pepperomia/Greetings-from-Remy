@@ -49,6 +49,7 @@ struct RecipeRow: Identifiable {
     let timeMinutes: Int
     let difficulty: String
     let calories: Int?
+    let cuisineId: Int?  // Добавляем поле
 
     var timeText: String {
         "\(timeMinutes) мин"
@@ -62,22 +63,17 @@ struct RecipeRow: Identifiable {
         }
     }
     
-    // Добавляем caloriesText
-    var caloriesText: String? {
-        guard let calories = calories, calories > 0 else { return nil }
-        return "\(calories) ккал"
-    }
-    
-    // Инициализатор для searchRecipes
-    init(id: Int, title: String, timeMinutes: Int, difficulty: String, calories: Int? = nil) {
+    // Инициализатор для fetchRecipes с cuisineId
+    init(id: Int, title: String, timeMinutes: Int, difficulty: String, calories: Int? = nil, cuisineId: Int? = nil) {
         self.id = id
         self.title = title
         self.timeMinutes = timeMinutes
         self.difficulty = difficulty
         self.calories = calories
+        self.cuisineId = cuisineId
     }
     
-    // Инициализатор для других методов
+    // Инициализатор для других методов (без cuisineId)
     init(id: Int, title: String, timeText: String, difficultyText: String, calories: Int? = nil) {
         self.id = id
         self.title = title
@@ -90,6 +86,7 @@ struct RecipeRow: Identifiable {
             }
         }()
         self.calories = calories
+        self.cuisineId = nil
     }
 }
 
@@ -201,11 +198,57 @@ extension RecipeRow {
         RecipeRow(id: 1, title: "Цезарь с курицей", timeMinutes: 25, difficulty: "easy", calories: 350)
     }
     
-    static var previews: [RecipeRow] {
-        [
-            RecipeRow(id: 1, title: "Цезарь с курицей", timeMinutes: 25, difficulty: "easy", calories: 350),
-            RecipeRow(id: 2, title: "Борщ", timeMinutes: 90, difficulty: "medium", calories: 250),
-            RecipeRow(id: 3, title: "Паста карбонара", timeMinutes: 30, difficulty: "medium", calories: 450)
-        ]
+    // MARK: - Recipe Row
+    
+    struct RecipeRow: Identifiable {
+        let id: Int
+        let title: String
+        let timeMinutes: Int
+        let difficulty: String
+        let calories: Int?
+        let cuisineId: Int?  // Добавляем поле для кухни
+        
+        var timeText: String {
+            "\(timeMinutes) мин"
+        }
+        
+        var difficultyText: String {
+            switch difficulty {
+            case "easy": return "легко"
+            case "hard": return "сложно"
+            default: return "средне"
+            }
+        }
+        
+        var caloriesText: String? {
+            guard let calories = calories, calories > 0 else { return nil }
+            return "\(calories) ккал"
+        }
+        
+        // Инициализатор для поиска
+        init(id: Int, title: String, timeMinutes: Int, difficulty: String, calories: Int? = nil, cuisineId: Int? = nil) {
+            self.id = id
+            self.title = title
+            self.timeMinutes = timeMinutes
+            self.difficulty = difficulty
+            self.calories = calories
+            self.cuisineId = cuisineId
+        }
+        
+        // Инициализатор для других методов
+        init(id: Int, title: String, timeText: String, difficultyText: String, calories: Int? = nil, cuisineId: Int? = nil) {
+            self.id = id
+            self.title = title
+            self.timeMinutes = 0
+            self.difficulty = {
+                switch difficultyText {
+                case "легко": return "easy"
+                case "сложно": return "hard"
+                default: return "medium"
+                }
+            }()
+            self.calories = calories
+            self.cuisineId = cuisineId
+        }
     }
 }

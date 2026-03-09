@@ -431,7 +431,7 @@ final class DatabaseManager {
 
     func fetchRecipes(categoryId: Int, maxMinutes: Int? = nil) throws -> [RecipeRow] {
         var sql = """
-        SELECT id, title, time_minutes, difficulty, calories
+        SELECT id, title, time_minutes, difficulty, calories, cuisine_id
         FROM recipes
         WHERE category_id = ? AND is_archived = 0
         """
@@ -455,40 +455,48 @@ final class DatabaseManager {
             let caloriesValue = row[4] as? Double
             let calories = caloriesValue.map { Int($0) }
             
+            // Получаем cuisine_id
+            let cuisineId = row[5] as? Int
+            
             return RecipeRow(
                 id: id,
                 title: title,
                 timeMinutes: timeMinutes,
                 difficulty: difficulty,
-                calories: calories
+                calories: calories,
+                cuisineId: cuisineId
             )
         }
     }
     
+    
     // MARK: SEARCH
 
-    func searchRecipes(query: String) throws -> [RecipeRow] {
-        let sql = """
+    func searchRecipes(query: String, cuisineId: Int? = nil) throws -> [RecipeRow] {
+        var sql = """
         SELECT DISTINCT r.id, r.title, r.time_minutes, r.difficulty, r.calories
         FROM recipes r
         LEFT JOIN recipe_ingredients ri ON ri.recipe_id = r.id
         LEFT JOIN ingredients i ON i.id = ri.ingredient_id
         WHERE r.is_archived = 0
         AND (r.title LIKE ? OR i.name LIKE ?)
-        ORDER BY r.title
-        LIMIT 200
         """
         
-        return try runQuery(
-            sql,
-            parameters: ["%\(query)%", "%\(query)%"]
-        ) { row in
+        var parameters: [Any] = ["%\(query)%", "%\(query)%"]
+        
+        if let cuisineId = cuisineId {
+            sql += " AND r.cuisine_id = ?"
+            parameters.append(cuisineId)
+        }
+        
+        sql += " ORDER BY r.title LIMIT 200"
+        
+        return try runQuery(sql, parameters: parameters) { row in
             let id = row[0] as? Int ?? 0
             let title = row[1] as? String ?? ""
             let timeMinutes = row[2] as? Int ?? 0
             let difficulty = row[3] as? String ?? "medium"
             
-            // Получаем Double и конвертируем в Int
             let caloriesValue = row[4] as? Double
             let calories = caloriesValue.map { Int($0) }
             
@@ -502,7 +510,7 @@ final class DatabaseManager {
         }
     }
     
-    func searchRecipesByIngredients(_ ingredients: [String]) throws -> [RecipeRow] {
+    func searchRecipesByIngredients(_ ingredients: [String], cuisineId: Int? = nil) throws -> [RecipeRow] {
         guard !ingredients.isEmpty else { return [] }
         
         try open()
@@ -524,9 +532,17 @@ final class DatabaseManager {
             """
         }
         
+        if cuisineId != nil {
+            sql += " AND r.cuisine_id = ?"
+        }
+        
         sql += "\nORDER BY r.title LIMIT 200"
         
-        let parameters = ingredients.map { "%\($0)%" }
+        var parameters: [Any] = ingredients.map { "%\($0)%" }
+        
+        if let cuisineId = cuisineId {
+            parameters.append(cuisineId)
+        }
         
         return try runQuery(sql, parameters: parameters) { row in
             let id = row[0] as? Int ?? 0
@@ -534,7 +550,6 @@ final class DatabaseManager {
             let timeMinutes = row[2] as? Int ?? 0
             let difficulty = row[3] as? String ?? "medium"
             
-            // Получаем Double и конвертируем в Int
             let caloriesValue = row[4] as? Double
             let calories = caloriesValue.map { Int($0) }
             
@@ -666,6 +681,254 @@ final class DatabaseManager {
             )
         }
     }
+
+    // MARK: - Update Recipe
+
+    func updateRecipe(
+        recipeId: Int,
+        title: String,
+        categoryId: Int,
+        cuisineName: String? = nil,
+        difficulty: String,
+        timeMinutes: Int,
+        servingsText: String? = nil,
+        instructions: String,
+        ingredientsLines: [String],
+        calories: Double? = nil,
+        protein: Double? = nil,
+        fat: Double? = nil,
+        carbs: Double? = nil
+    ) throws {
+        
+        try open()
+        
+        var cuisineId: Int? = nil
+        
+        // Если указана кухня, находим или создаем её
+        if let cuisineName, !cuisineName.trimmingCharacters(in: .whitespaces).isEmpty {
+            let trimmed = cuisineName.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // Проверяем существующую кухню
+            let existing: [Int] = try runQuery(
+                "SELECT id FROM cuisines WHERE name = ? LIMIT 1;",
+                parameters: [trimmed]
+            ) { $0[0] as? Int ?? 0 }
+            
+            if let id = existing.first {
+                cuisineId = id
+            } else {
+                // Создаем новую кухню
+                cuisineId = try addCuisine(name: trimmed)
+            }
+        }
+        
+        // Обновляем рецепт
+        let sql = """
+        UPDATE recipes 
+        SET title = ?,
+            category_id = ?,
+            cuisine_id = ?,
+            difficulty = ?,
+            time_minutes = ?,
+            time_text = ?,
+            servings_text = ?,
+            instructions = ?,
+            calories = ?,
+            protein = ?,
+            fat = ?,
+            carbs = ?
+        WHERE id = ? AND is_archived = 0;
+        """
+        
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+        
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
+            throw NSError(domain: "DatabaseManager",
+                         code: 5,
+                         userInfo: [NSLocalizedDescriptionKey: "Ошибка подготовки запроса: \(lastError())"])
+        }
+        
+        // Биндим параметры
+        sqlite3_bind_text(stmt, 1, title, -1, nil)
+        sqlite3_bind_int(stmt, 2, Int32(categoryId))
+        
+        if let cuisineId {
+            sqlite3_bind_int(stmt, 3, Int32(cuisineId))
+        } else {
+            sqlite3_bind_null(stmt, 3)
+        }
+        
+        sqlite3_bind_text(stmt, 4, difficulty, -1, nil)
+        sqlite3_bind_int(stmt, 5, Int32(timeMinutes))
+        
+        let timeText = "\(timeMinutes) мин"
+        sqlite3_bind_text(stmt, 6, timeText, -1, nil)
+        
+        if let servingsText {
+            sqlite3_bind_text(stmt, 7, servingsText, -1, nil)
+        } else {
+            sqlite3_bind_null(stmt, 7)
+        }
+        
+        sqlite3_bind_text(stmt, 8, instructions, -1, nil)
+        
+        sqlite3_bind_double(stmt, 9, calories ?? 0)
+        sqlite3_bind_double(stmt, 10, protein ?? 0)
+        sqlite3_bind_double(stmt, 11, fat ?? 0)
+        sqlite3_bind_double(stmt, 12, carbs ?? 0)
+        
+        sqlite3_bind_int(stmt, 13, Int32(recipeId))
+        
+        if sqlite3_step(stmt) != SQLITE_DONE {
+            throw NSError(domain: "DatabaseManager",
+                         code: 6,
+                         userInfo: [NSLocalizedDescriptionKey: "Ошибка обновления рецепта: \(lastError())"])
+        }
+        
+        print("✅ Рецепт \(recipeId) обновлен: \(title)")
+        
+        // Удаляем старые ингредиенты
+        let deleteSQL = "DELETE FROM recipe_ingredients WHERE recipe_id = ?;"
+        var deleteStmt: OpaquePointer?
+        defer { sqlite3_finalize(deleteStmt) }
+        
+        if sqlite3_prepare_v2(db, deleteSQL, -1, &deleteStmt, nil) == SQLITE_OK {
+            sqlite3_bind_int(deleteStmt, 1, Int32(recipeId))
+            sqlite3_step(deleteStmt)
+        }
+        
+        // Добавляем новые ингредиенты
+        try addIngredients(recipeId: recipeId, ingredientsLines: ingredientsLines)
+    }
+
+    // MARK: - Fetch Recipe for Editing
+
+    func fetchRecipeForEditing(recipeId: Int) throws -> (detail: RecipeDetail, cuisineId: Int?, ingredients: [IngredientLine]) {
+        let detail = try fetchRecipeDetail(recipeId: recipeId)
+        let ingredients = try fetchIngredients(recipeId: recipeId)
+        
+        // Получаем cuisine_id для редактирования
+        let sql = "SELECT cuisine_id FROM recipes WHERE id = ?;"
+        let cuisineId = try runQuery(sql, parameters: [recipeId]) { row in
+            row[0] as? Int
+        }.first ?? nil
+        
+        return (detail, cuisineId, ingredients)
+    }
+    // MARK: - Favorites Methods
+    
+    func toggleFavorite(recipeId: Int) throws -> Bool {
+        try open()
+        
+        // Проверяем текущий статус
+        let checkSQL = "SELECT is_favorite FROM user_recipe_data WHERE recipe_id = ?;"
+        let current: [Bool] = try runQuery(checkSQL, parameters: [recipeId]) { row in
+            (row[0] as? Int ?? 0) != 0
+        }
+        
+        let newValue = !(current.first ?? false)
+        
+        // Вставляем или обновляем
+        let sql = """
+        INSERT INTO user_recipe_data (recipe_id, is_favorite, cooked_count)
+        VALUES (?, ?, 0)
+        ON CONFLICT(recipe_id) DO UPDATE SET is_favorite = ?;
+        """
+        
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+        
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
+            throw NSError(domain: "DatabaseManager",
+                         code: 7,
+                         userInfo: [NSLocalizedDescriptionKey: lastError()])
+        }
+        
+        sqlite3_bind_int(stmt, 1, Int32(recipeId))
+        sqlite3_bind_int(stmt, 2, newValue ? 1 : 0)
+        sqlite3_bind_int(stmt, 3, newValue ? 1 : 0)
+        
+        if sqlite3_step(stmt) != SQLITE_DONE {
+            throw NSError(domain: "DatabaseManager",
+                         code: 8,
+                         userInfo: [NSLocalizedDescriptionKey: lastError()])
+        }
+        
+        print("\(newValue ? "✅ Добавлено в избранное" : "❌ Удалено из избранного") рецепт \(recipeId)")
+        return newValue
+    }
+
+    func getUserRecipeData(recipeId: Int) throws -> (isFavorite: Bool, cookedCount: Int) {
+        try open()
+        
+        let sql = """
+        SELECT is_favorite, cooked_count
+        FROM user_recipe_data
+        WHERE recipe_id = ?
+        LIMIT 1;
+        """
+        
+        let rows = try runQuery(sql, parameters: [recipeId]) { row -> (Bool, Int) in
+            let isFavorite = (row[0] as? Int ?? 0) != 0
+            let cookedCount = row[1] as? Int ?? 0
+            return (isFavorite, cookedCount)
+        }
+        
+        if let row = rows.first {
+            return row
+        } else {
+            // Создаем запись по умолчанию
+            let insertSQL = """
+            INSERT INTO user_recipe_data (recipe_id, is_favorite, cooked_count)
+            VALUES (?, 0, 0);
+            """
+            
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            
+            if sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) != SQLITE_OK {
+                throw NSError(domain: "DatabaseManager",
+                             code: 5,
+                             userInfo: [NSLocalizedDescriptionKey: lastError()])
+            }
+            sqlite3_bind_int(stmt, 1, Int32(recipeId))
+            
+            if sqlite3_step(stmt) != SQLITE_DONE {
+                throw NSError(domain: "DatabaseManager",
+                             code: 6,
+                             userInfo: [NSLocalizedDescriptionKey: lastError()])
+            }
+            return (false, 0)
+        }
+    }
+
+    func fetchFavoriteRecipes() throws -> [RecipeRow] {
+        let sql = """
+        SELECT r.id, r.title, r.time_minutes, r.difficulty, r.calories
+        FROM recipes r
+        JOIN user_recipe_data urd ON urd.recipe_id = r.id
+        WHERE urd.is_favorite = 1 AND r.is_archived = 0
+        ORDER BY r.title;
+        """
+        
+        return try runQuery(sql) { row in
+            let id = row[0] as? Int ?? 0
+            let title = row[1] as? String ?? ""
+            let timeMinutes = row[2] as? Int ?? 0
+            let difficulty = row[3] as? String ?? "medium"
+            let caloriesValue = row[4] as? Double
+            let calories = caloriesValue.map { Int($0) }
+            
+            return RecipeRow(
+                id: id,
+                title: title,
+                timeMinutes: timeMinutes,
+                difficulty: difficulty,
+                calories: calories
+            )
+        }
+    }
     
     // MARK: - Debug Methods
     
@@ -725,7 +988,6 @@ final class DatabaseManager {
         print("===============================\n")
     }
     
-    // MARK: - Новый отладочный метод для проверки ингредиентов
     func debugCheckIngredients() throws {
         let sql = """
         SELECT r.title, i.name, ri.amount_text
@@ -750,7 +1012,6 @@ final class DatabaseManager {
         }
     }
     
-    // MARK: - Простой метод для проверки количества записей
     func simpleDebugCheck() {
         do {
             try open()
@@ -902,3 +1163,5 @@ struct SQLiteRow {
         }
     }
 }
+
+
