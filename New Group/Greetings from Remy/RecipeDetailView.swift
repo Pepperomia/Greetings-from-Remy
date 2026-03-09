@@ -36,19 +36,15 @@ struct RecipeDetailView: View {
                         instructionsSection(detail)
                             .padding(.horizontal, 20)
                         
-                        // Кнопка удаления
                         deleteButton
                             .padding(.horizontal, 20)
                             .padding(.top, 10)
                             .padding(.bottom, 20)
                     }
                     else if let errorText = errorText {
-                        
                         errorView(errorText)
-                        
                     }
                     else {
-                        
                         loadingView
                     }
                 }
@@ -60,29 +56,32 @@ struct RecipeDetailView: View {
         .navigationTitle("Рецепт")
         .navigationBarTitleDisplayMode(.inline)
         .alert("Удаление рецепта", isPresented: $showingDeleteAlert) {
-            Button("Отмена", role: .cancel) { }
+            Button("Отмена", role: .cancel) {}
             Button("Удалить", role: .destructive) {
                 deleteRecipe()
             }
         } message: {
             Text("Вы уверены, что хотите удалить рецепт «\(detail?.title ?? "")»?")
         }
-        .onAppear { load() }
+        .onAppear {
+            load()
+        }
     }
     
-    // MARK: - Delete Button
+    // MARK: DELETE BUTTON
     
     private var deleteButton: some View {
-        Button(action: {
+        
+        Button {
             showingDeleteAlert = true
-        }) {
+        } label: {
             HStack {
                 if isDeleting {
-                    ProgressView()
-                        .tint(.red)
+                    ProgressView().tint(.red)
                 } else {
                     Image(systemName: "trash")
                 }
+                
                 Text("Удалить рецепт")
             }
             .frame(maxWidth: .infinity)
@@ -92,30 +91,71 @@ struct RecipeDetailView: View {
             .cornerRadius(16)
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                    .stroke(Color.red.opacity(0.3))
             )
         }
         .disabled(isDeleting)
     }
     
-    // MARK: - Delete Function
+    // MARK: DELETE
     
     private func deleteRecipe() {
+        
         isDeleting = true
         
         DispatchQueue.global(qos: .userInitiated).async {
+            
             do {
+                
                 try DatabaseManager.shared.deleteRecipe(id: recipeId)
                 
                 DispatchQueue.main.async {
                     isDeleting = false
                     dismiss()
                 }
+                
             } catch {
+                
                 DispatchQueue.main.async {
                     errorText = error.localizedDescription
                     isDeleting = false
                     showingDeleteAlert = false
+                }
+            }
+        }
+    }
+    
+    // MARK: - Load Data
+    
+    private func load() {
+        print("🔄 Загрузка рецепта id: \(recipeId)")
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            
+            do {
+                // Загружаем детали рецепта
+                let detailData = try DatabaseManager.shared.fetchRecipeDetail(recipeId: recipeId)
+                print("✅ Загружен рецепт: \(detailData.title)")
+                
+                // Загружаем ингредиенты
+                let ingredientData = try DatabaseManager.shared.fetchIngredients(recipeId: recipeId)
+                print("✅ Загружено ингредиентов: \(ingredientData.count)")
+                
+                // Выводим каждый ингредиент для отладки
+                for ingredient in ingredientData {
+                    print("   📝 id: \(ingredient.id), \(ingredient.name) - '\(ingredient.amountText)'")
+                }
+                
+                DispatchQueue.main.async {
+                    self.detail = detailData
+                    self.ingredients = ingredientData
+                }
+                
+            } catch {
+                print("❌ Ошибка загрузки: \(error)")
+                
+                DispatchQueue.main.async {
+                    self.errorText = error.localizedDescription
                 }
             }
         }
@@ -128,41 +168,31 @@ private extension RecipeDetailView {
     
     func header(_ detail: RecipeDetail) -> some View {
         
-        VStack(alignment: .center, spacing: 12) {
+        VStack(spacing: 12) {
             
             Text(detail.title)
                 .font(.largeTitle.bold())
                 .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity)
             
             Text(detail.metaLine)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
             
             categoryCuisine(detail)
-                .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
         .padding(.horizontal, 16)
         .background(
             RoundedRectangle(cornerRadius: 28)
                 .fill(.ultraThinMaterial)
-                .opacity(0.8)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 28)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                .stroke(Color.white.opacity(0.2))
         )
-        .shadow(
-            color: .black.opacity(0.1),
-            radius: 15,
-            x: 0,
-            y: 8
-        )
+        .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 8)
     }
     
     func categoryCuisine(_ detail: RecipeDetail) -> some View {
@@ -173,41 +203,20 @@ private extension RecipeDetailView {
                 .font(.caption.bold())
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(.regularMaterial)
-                        .opacity(0.9)
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                )
-                .lineLimit(1)
+                .background(Capsule().fill(.regularMaterial))
             
-            if let cuisine = detail.cuisineName,
-               !cuisine.isEmpty {
-                
+            if let cuisine = detail.cuisineName, !cuisine.isEmpty {
                 Text(cuisine)
                     .font(.caption)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(.regularMaterial)
-                            .opacity(0.9)
-                    )
-                    .overlay(
-                        Capsule()
-                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                    )
-                    .lineLimit(1)
+                    .background(Capsule().fill(.regularMaterial))
             }
         }
-        .frame(maxWidth: .infinity, alignment: .center)
     }
 }
 
-// MARK: NUTRITION INFO
+// MARK: NUTRITION
 
 private extension RecipeDetailView {
     
@@ -216,8 +225,6 @@ private extension RecipeDetailView {
         VStack(alignment: .leading, spacing: 16) {
             
             sectionHeader("Пищевая ценность")
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 4)
             
             if let calories = detail.calories {
                 nutritionRow(
@@ -229,6 +236,7 @@ private extension RecipeDetailView {
             }
             
             HStack(spacing: 12) {
+                
                 if let protein = detail.protein {
                     nutritionCompactRow(
                         title: "Белки",
@@ -253,51 +261,40 @@ private extension RecipeDetailView {
                     )
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(18)
         .background(
             RoundedRectangle(cornerRadius: 28)
                 .fill(.ultraThinMaterial)
-                .opacity(0.8)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 28)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                .stroke(Color.white.opacity(0.2))
         )
-        .shadow(
-            color: .black.opacity(0.1),
-            radius: 15,
-            x: 0,
-            y: 8
-        )
+        .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 8)
     }
     
     func nutritionRow(icon: String, iconColor: Color, title: String, value: String) -> some View {
         
-        HStack(spacing: 12) {
+        HStack {
             
             Image(systemName: icon)
                 .foregroundStyle(iconColor)
-                .font(.system(size: 16))
                 .frame(width: 24)
             
             Text(title)
-                .font(.subheadline)
                 .foregroundStyle(.secondary)
             
             Spacer()
             
             Text(value)
-                .font(.subheadline.bold())
-                .foregroundStyle(.primary)
+                .bold()
         }
-        .padding(.vertical, 4)
     }
     
     func nutritionCompactRow(title: String, value: String, color: Color) -> some View {
         
-        VStack(alignment: .center, spacing: 6) {
+        VStack(spacing: 6) {
             
             Text(title)
                 .font(.caption)
@@ -316,11 +313,6 @@ private extension RecipeDetailView {
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(.ultraThinMaterial)
-                .opacity(0.7)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.15), lineWidth: 1)
         )
     }
 }
@@ -334,54 +326,55 @@ private extension RecipeDetailView {
         VStack(alignment: .leading, spacing: 14) {
             
             sectionHeader("Ингредиенты")
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 2)
             
-            ForEach(ingredients) { ingredient in
-                
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
+            if ingredients.isEmpty {
+                Text("Ингредиенты не указаны")
+                    .foregroundStyle(.secondary)
+                    .italic()
+                    .padding(.vertical, 8)
+            } else {
+                ForEach(ingredients) { ingredient in
                     
-                    Text("•")
-                        .foregroundStyle(.secondary)
-                        .font(.title3)
-                        .frame(width: 15)
-                    
-                    Text(ingredient.name)
-                        .fixedSize(horizontal: false, vertical: true)
-                    
-                    Spacer(minLength: 8)
-                    
-                    Text(ingredient.amountText)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.trailing)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill(.ultraThinMaterial)
-                                .opacity(0.5)
-                        )
+                    HStack(alignment: .center, spacing: 12) {
+                        
+                        // Маркер
+                        Text("•")
+                            .foregroundStyle(.secondary)
+                            .font(.title3)
+                            .frame(width: 15)
+                        
+                        // Название ингредиента
+                        Text(ingredient.name)
+                            .font(.body)
+                            .lineLimit(1)
+                        
+                        Spacer(minLength: 8)
+                        
+                        // Количество (всегда показываем, даже если пусто)
+                        Text(ingredient.amountText.isEmpty ? "—" : ingredient.amountText)
+                            .foregroundStyle(.secondary)
+                            .font(.subheadline)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill(.ultraThinMaterial)
+                            )
+                    }
+                    .padding(.vertical, 6)
                 }
-                .padding(.vertical, 4)
             }
         }
         .padding(18)
         .background(
             RoundedRectangle(cornerRadius: 28)
                 .fill(.ultraThinMaterial)
-                .opacity(0.8)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 28)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                .stroke(Color.white.opacity(0.2))
         )
-        .shadow(
-            color: .black.opacity(0.1),
-            radius: 15,
-            x: 0,
-            y: 8
-        )
+        .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 8)
     }
 }
 
@@ -394,31 +387,27 @@ private extension RecipeDetailView {
         VStack(alignment: .leading, spacing: 14) {
             
             sectionHeader("Приготовление")
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 2)
             
-            Text(formatSteps(detail.instructions))
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .lineSpacing(6)
+            if detail.instructions.isEmpty {
+                Text("Инструкция отсутствует")
+                    .foregroundStyle(.secondary)
+                    .italic()
+            } else {
+                Text(formatSteps(detail.instructions))
+                    .textSelection(.enabled)
+                    .lineSpacing(6)
+            }
         }
         .padding(18)
         .background(
             RoundedRectangle(cornerRadius: 28)
                 .fill(.ultraThinMaterial)
-                .opacity(0.8)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 28)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                .stroke(Color.white.opacity(0.2))
         )
-        .shadow(
-            color: .black.opacity(0.1),
-            radius: 15,
-            x: 0,
-            y: 8
-        )
+        .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 8)
     }
     
     func formatSteps(_ text: String) -> String {
@@ -429,9 +418,8 @@ private extension RecipeDetailView {
             .filter { !$0.isEmpty }
         
         if steps.count > 1 {
-            
             return steps.enumerated()
-                .map { "\($0+1). \($1)" }
+                .map { "\($0 + 1). \($1)" }
                 .joined(separator: "\n\n")
         }
         
@@ -444,53 +432,36 @@ private extension RecipeDetailView {
 private extension RecipeDetailView {
     
     func sectionHeader(_ title: String) -> some View {
-        
         Text(title)
             .font(.title3.bold())
-            .foregroundStyle(.primary)
     }
     
     var loadingView: some View {
         
-        ProgressView()
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
-            .background(
-                RoundedRectangle(cornerRadius: 28)
-                    .fill(.ultraThinMaterial)
-                    .opacity(0.8)
-            )
-            .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 8)
-            .padding(.horizontal, 4)
+        VStack(spacing: 20) {
+            ProgressView()
+                .scaleEffect(1.2)
+            Text("Загрузка рецепта...")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
     }
     
     func errorView(_ text: String) -> some View {
         
-        Text(text)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 28)
-                    .fill(.ultraThinMaterial)
-                    .opacity(0.8)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 28)
-                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 8)
-            .padding(.horizontal, 4)
-    }
-    
-    func load() {
-        do {
-            detail = try DatabaseManager.shared.fetchRecipeDetail(recipeId: recipeId)
-            ingredients = try DatabaseManager.shared.fetchIngredients(recipeId: recipeId)
-        } catch {
-            errorText = error.localizedDescription
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.largeTitle)
+                .foregroundStyle(.red)
+            
+            Text(text)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
         }
+        .padding()
+        .frame(maxWidth: .infinity)
     }
 }
 

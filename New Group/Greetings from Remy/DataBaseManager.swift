@@ -326,23 +326,40 @@ final class DatabaseManager {
     }
     
     // MARK: - Add Ingredients Helper
-    
+
     private func addIngredients(recipeId: Int, ingredientsLines: [String]) throws {
+        print("📝 Добавление ингредиентов для рецепта \(recipeId)")
         
         for (index, line) in ingredientsLines.enumerated() {
             
-            // Парсим строку ингредиента (формат: "Название — количество")
-            let parts = line
-                .components(separatedBy: "—")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
+            // Проверяем разные возможные разделители
+            var parts: [String] = []
             
-            let ingredientName = parts.first ?? ""
-            let amountText = parts.count > 1 ? parts[1] : ""
+            if line.contains("—") {
+                parts = line.components(separatedBy: "—")
+            } else if line.contains("-") {
+                parts = line.components(separatedBy: "-")
+            } else if line.contains("–") {
+                parts = line.components(separatedBy: "–")
+            } else {
+                parts = [line, ""]
+            }
             
-            guard !ingredientName.isEmpty else { continue }
+            let ingredientName = parts.first?.trimmingCharacters(in: .whitespaces) ?? ""
+            let amountText = parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespaces) : ""
+            
+            print("  📝 Строка: '\(line)'")
+            print("     → название: '\(ingredientName)'")
+            print("     → количество: '\(amountText)'")
+            
+            guard !ingredientName.isEmpty else {
+                print("     ⚠️ Пропускаем - пустое название")
+                continue
+            }
             
             // Находим или создаем ингредиент
             let ingredientId = try findOrCreateIngredient(name: ingredientName)
+            print("     ✅ ID ингредиента: \(ingredientId)")
             
             // Связываем ингредиент с рецептом
             let linkSQL = """
@@ -361,8 +378,14 @@ final class DatabaseManager {
                 sqlite3_bind_int(linkStmt, 4, Int32(index))
                 
                 if sqlite3_step(linkStmt) == SQLITE_DONE {
-                    print("  ✅ Ингредиент: \(ingredientName) -> \(amountText)")
+                    print("     ✅ Сохранено: \(ingredientName) -> '\(amountText)'")
+                } else {
+                    let error = String(cString: sqlite3_errmsg(db))
+                    print("     ❌ Ошибка: \(error)")
                 }
+            } else {
+                let error = String(cString: sqlite3_errmsg(db))
+                print("     ❌ Ошибка подготовки: \(error)")
             }
         }
     }
@@ -617,7 +640,6 @@ final class DatabaseManager {
     // MARK: INGREDIENTS
 
     func fetchIngredients(recipeId: Int) throws -> [IngredientLine] {
-
         let sql = """
         SELECT ri.id, i.name, ri.amount_text, ri.sort_order
         FROM recipe_ingredients ri
@@ -625,14 +647,22 @@ final class DatabaseManager {
         WHERE ri.recipe_id = ?
         ORDER BY ri.sort_order
         """
-
-        return try runQuery(sql, parameters:[recipeId]) { row in
-
-            IngredientLine(
-                id: row[0] as? Int ?? 0,
-                name: row[1] as? String ?? "",
-                amountText: row[2] as? String ?? "",
-                sortOrder: row[3] as? Int ?? 0
+        
+        print("🔍 Загрузка ингредиентов для рецепта \(recipeId)")
+        
+        return try runQuery(sql, parameters: [recipeId]) { row in
+            let id = row[0] as? Int ?? 0
+            let name = row[1] as? String ?? ""
+            let amountText = row[2] as? String ?? ""
+            let sortOrder = row[3] as? Int ?? 0
+            
+            print("   ✅ Ингредиент: \(name) - '\(amountText)'")
+            
+            return IngredientLine(
+                id: id,
+                name: name,
+                amountText: amountText,
+                sortOrder: sortOrder
             )
         }
     }
@@ -693,6 +723,52 @@ final class DatabaseManager {
         recipes.forEach { print($0) }
         
         print("===============================\n")
+    }
+    
+    // MARK: - Новый отладочный метод для проверки ингредиентов
+    func debugCheckIngredients() throws {
+        let sql = """
+        SELECT r.title, i.name, ri.amount_text
+        FROM recipe_ingredients ri
+        JOIN recipes r ON r.id = ri.recipe_id
+        JOIN ingredients i ON i.id = ri.ingredient_id
+        LIMIT 20
+        """
+        
+        let results = try runQuery(sql, parameters: []) { row in
+            let recipe = row[0] as? String ?? ""
+            let ingredient = row[1] as? String ?? ""
+            let amount = row[2] as? String ?? ""
+            return "\(recipe) → \(ingredient) → '\(amount)'"
+        }
+        
+        print("📊 Проверка ингредиентов в базе:")
+        if results.isEmpty {
+            print("   ❌ Нет данных в таблице recipe_ingredients")
+        } else {
+            results.forEach { print("   \($0)") }
+        }
+    }
+    
+    // MARK: - Простой метод для проверки количества записей
+    func simpleDebugCheck() {
+        do {
+            try open()
+            
+            let sql = "SELECT COUNT(*) FROM recipe_ingredients"
+            var stmt: OpaquePointer?
+            
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                if sqlite3_step(stmt) == SQLITE_ROW {
+                    let count = sqlite3_column_int(stmt, 0)
+                    print("📊 Всего записей в recipe_ingredients: \(count)")
+                }
+            }
+            sqlite3_finalize(stmt)
+            
+        } catch {
+            print("❌ Ошибка: \(error)")
+        }
     }
     
     // MARK: - Delete Methods

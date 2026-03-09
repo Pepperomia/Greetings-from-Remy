@@ -150,6 +150,11 @@ struct IngredientLine: Identifiable {
     let name: String
     let amountText: String
     let sortOrder: Int
+    
+    // Добавим вычисляемое свойство для отладки
+    var debugDescription: String {
+        return "\(name) - \(amountText)"
+    }
 }
 
 // MARK: - User Recipe Data

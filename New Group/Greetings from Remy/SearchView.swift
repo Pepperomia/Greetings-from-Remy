@@ -25,6 +25,12 @@ struct SearchView: View {
     // MARK: - Сюрприз
     @State private var surpriseRecipeId: Int?
     
+    // MARK: - Оптимизация
+    @State private var searchTask: DispatchWorkItem?
+    @State private var searchCache: [String: [RecipeRow]] = [:]
+    private let minimumSearchLength = 2
+    private let searchDelay: TimeInterval = 0.5
+    
     enum SearchMode: String, CaseIterable {
         case name = "По названию"
         case ingredients = "По ингредиентам"
@@ -66,8 +72,11 @@ struct SearchView: View {
                                     RoundedRectangle(cornerRadius: 16)
                                         .stroke(Color.white.opacity(0.2), lineWidth: 1)
                                 )
+                                .onChange(of: query) { _, _ in
+                                    debounceSearch()
+                                }
                                 .onSubmit {
-                                    runSearch()
+                                    debounceSearch()
                                 }
                         } else {
                             ingredientsSearchField
@@ -141,13 +150,11 @@ struct SearchView: View {
             set: { if !$0 { surpriseRecipeId = nil } }
         )
     }
-}
-
-// MARK: - Ingredients Search Field
-
-private extension SearchView {
     
-    var ingredientsSearchField: some View {
+    // MARK: - Ingredients Search Field
+    
+    @ViewBuilder
+    private var ingredientsSearchField: some View {
         VStack(alignment: .leading, spacing: 16) {
             
             // Выбранные ингредиенты
@@ -208,7 +215,7 @@ private extension SearchView {
         }
     }
     
-    func ingredientChip(_ ingredient: String) -> some View {
+    private func ingredientChip(_ ingredient: String) -> some View {
         HStack(spacing: 6) {
             Text(ingredient)
                 .font(.subheadline)
@@ -216,7 +223,7 @@ private extension SearchView {
             Button {
                 selectedIngredients.removeAll { $0 == ingredient }
                 if !selectedIngredients.isEmpty {
-                    runSearch()
+                    debounceSearch()
                 } else {
                     results = []
                     originalResults = []
@@ -239,7 +246,7 @@ private extension SearchView {
         )
     }
     
-    var suggestionsScrollView: some View {
+    private var suggestionsScrollView: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(ingredientSuggestions, id: \.self) { suggestion in
@@ -266,7 +273,7 @@ private extension SearchView {
         }
     }
     
-    var popularIngredientsView: some View {
+    private var popularIngredientsView: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Популярные ингредиенты")
                 .font(.caption)
@@ -300,49 +307,48 @@ private extension SearchView {
         }
     }
     
-    func addIngredient() {
+    private func addIngredient() {
         let trimmed = ingredientInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !selectedIngredients.contains(trimmed) else { return }
         
         selectedIngredients.append(trimmed)
         ingredientInput = ""
         showSuggestions = false
-        runSearch()
+        debounceSearch()
     }
     
-    func loadIngredientSuggestions(for prefix: String) {
+    private func loadIngredientSuggestions(for prefix: String) {
+        guard prefix.count >= 1 else { return }
+        
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let suggestions = try DatabaseManager.shared.searchIngredientSuggestions(prefix: prefix)
                 DispatchQueue.main.async {
-                    ingredientSuggestions = suggestions
+                    self.ingredientSuggestions = suggestions
                 }
             } catch {
                 print("Ошибка загрузки подсказок: \(error)")
-                ingredientSuggestions = []
+                self.ingredientSuggestions = []
             }
         }
     }
     
-    func loadPopularIngredients() {
+    private func loadPopularIngredients() {
         DispatchQueue.global(qos: .background).async {
             do {
                 let popular = try DatabaseManager.shared.getPopularIngredients(limit: 15)
                 DispatchQueue.main.async {
-                    popularIngredients = popular
+                    self.popularIngredients = popular
                 }
             } catch {
                 print("Ошибка загрузки популярных ингредиентов: \(error)")
             }
         }
     }
-}
-
-// MARK: - Filters
-
-private extension SearchView {
     
-    var filtersRow: some View {
+    // MARK: - Filters
+    
+    private var filtersRow: some View {
         HStack(spacing: 25) {
             
             filterButton(
@@ -373,7 +379,7 @@ private extension SearchView {
         .frame(maxWidth: .infinity)
     }
     
-    func filterButton(
+    private func filterButton(
         image: String,
         title: String,
         isActive: Bool = false,
@@ -396,17 +402,14 @@ private extension SearchView {
         .opacity(isActive ? 0.6 : 1.0)
     }
     
-    func surpriseMe() {
+    private func surpriseMe() {
         guard !results.isEmpty else { return }
         surpriseRecipeId = results.randomElement()?.id
     }
-}
-
-// MARK: - Results Section
-
-private extension SearchView {
     
-    var resultsSection: some View {
+    // MARK: - Results Section
+    
+    private var resultsSection: some View {
         VStack(spacing: 16) {
             // Заголовок по центру
             HStack {
@@ -451,6 +454,147 @@ private extension SearchView {
             return "рецепта"
         } else {
             return "рецептов"
+        }
+    }
+    
+    // MARK: - Empty View & Error View
+    
+    private var emptyView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: searchMode == .name ? "magnifyingglass" : "carrot")
+                .font(.system(size: 50))
+                .foregroundStyle(.secondary)
+            
+            Text(searchMode == .name ? "Ничего не найдено" : "Нет рецептов с такими ингредиентами")
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.top, 40)
+    }
+    
+    private func errorView(errorText: String) -> some View {
+        Text(errorText)
+            .foregroundStyle(.red)
+            .padding(.top, 40)
+    }
+    
+    // MARK: - Search Logic
+
+    private func clearSearch() {
+        query = ""
+        selectedIngredients = []
+        ingredientInput = ""
+        results = []
+        originalResults = []
+        filter30 = false
+        sortByCalories = false
+        showSuggestions = false
+        searchCache.removeAll()
+        
+        searchTask?.cancel()
+    }
+
+    private func debounceSearch() {
+        searchTask?.cancel()
+        
+        let task = DispatchWorkItem {
+            runSearch()
+        }
+        
+        searchTask = task
+        
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + searchDelay,
+            execute: task
+        )
+    }
+
+    private func runSearch() {
+        
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        if searchMode == .name {
+            guard trimmedQuery.count >= minimumSearchLength else {
+                DispatchQueue.main.async {
+                    results = []
+                    originalResults = []
+                }
+                return
+            }
+        } else {
+            guard !selectedIngredients.isEmpty else {
+                DispatchQueue.main.async {
+                    results = []
+                    originalResults = []
+                }
+                return
+            }
+        }
+        
+        let cacheKey = "\(searchMode)-\(trimmedQuery)-\(selectedIngredients.joined(separator: ","))"
+        
+        if let cached = searchCache[cacheKey] {
+            DispatchQueue.main.async {
+                results = cached
+                originalResults = cached
+            }
+            return
+        }
+        
+        isSearching = true
+        errorText = nil
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            
+            do {
+                let found: [RecipeRow]
+                
+                if searchMode == .name {
+                    found = try DatabaseManager.shared.searchRecipes(query: trimmedQuery)
+                } else {
+                    found = try DatabaseManager.shared.searchRecipesByIngredients(selectedIngredients)
+                }
+                
+                DispatchQueue.main.async {
+                    
+                    searchCache[cacheKey] = found
+                    originalResults = found
+                    
+                    applyFilters()
+                    
+                    isSearching = false
+                }
+                
+            } catch {
+                DispatchQueue.main.async {
+                    errorText = error.localizedDescription
+                    isSearching = false
+                }
+            }
+        }
+    }
+    
+    private func applyFilters() {
+        guard !originalResults.isEmpty else { return }
+        
+        var filtered = originalResults
+        
+        if filter30 {
+            filtered = filtered.filter { $0.timeMinutes <= 30 }
+        }
+        
+        results = filtered
+        
+        if sortByCalories {
+            sortResultsByCalories()
+        }
+    }
+    
+    private func sortResultsByCalories() {
+        results.sort { recipe1, recipe2 in
+            let calories1 = recipe1.calories ?? 0
+            let calories2 = recipe2.calories ?? 0
+            return calories1 < calories2
         }
     }
 }
@@ -507,7 +651,6 @@ private struct ImprovedRecipeCardRow: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    // Если calories = nil, просто не показываем калории
                     
                     // Сложность
                     if !recipe.difficultyText.isEmpty {
@@ -543,128 +686,5 @@ private struct ImprovedRecipeCardRow: View {
             x: 0,
             y: 8
         )
-    }
-}
-
-// MARK: - Empty View & Error View
-
-private extension SearchView {
-    
-    var emptyView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: searchMode == .name ? "magnifyingglass" : "carrot")
-                .font(.system(size: 50))
-                .foregroundStyle(.secondary)
-            
-            Text(searchMode == .name ? "Ничего не найдено" : "Нет рецептов с такими ингредиентами")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .padding(.top, 40)
-    }
-    
-    func errorView(errorText: String) -> some View {
-        Text(errorText)
-            .foregroundStyle(.red)
-            .padding(.top, 40)
-    }
-}
-
-// MARK: - Search Logic
-
-private extension SearchView {
-    
-    func clearSearch() {
-        query = ""
-        selectedIngredients = []
-        ingredientInput = ""
-        results = []
-        originalResults = []
-        filter30 = false
-        sortByCalories = false
-        showSuggestions = false
-    }
-    
-    func runSearch() {
-        if searchMode == .name {
-            let text = query.trimmingCharacters(in: .whitespaces)
-            guard !text.isEmpty else {
-                results = []
-                originalResults = []
-                return
-            }
-        } else {
-            guard !selectedIngredients.isEmpty else {
-                results = []
-                originalResults = []
-                return
-            }
-        }
-        
-        isSearching = true
-        errorText = nil
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let found: [RecipeRow]
-                
-                if searchMode == .name {
-                    found = try DatabaseManager.shared.searchRecipes(query: query)
-                } else {
-                    found = try DatabaseManager.shared.searchRecipesByIngredients(selectedIngredients)
-                }
-                
-                DispatchQueue.main.async {
-                    // НЕ генерируем случайные калории, используем реальные
-                    self.originalResults = found
-                    
-                    // Отладка - посмотрим реальные калории
-                    for recipe in found {
-                        print("🔍 Рецепт: \(recipe.title), калории из БД: \(recipe.calories?.description ?? "nil")")
-                    }
-                    
-                    var filtered = found
-                    if self.filter30 {
-                        filtered = filtered.filter { $0.timeMinutes <= 30 }
-                    }
-                    
-                    self.results = filtered
-                    self.isSearching = false
-                    
-                    if self.sortByCalories {
-                        self.sortResultsByCalories()
-                    }
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.errorText = error.localizedDescription
-                    self.isSearching = false
-                }
-            }
-        }
-    }
-    
-    func applyFilters() {
-        guard !originalResults.isEmpty else { return }
-        
-        var filtered = originalResults
-        
-        if filter30 {
-            filtered = filtered.filter { $0.timeMinutes <= 30 }
-        }
-        
-        results = filtered
-        
-        if sortByCalories {
-            sortResultsByCalories()
-        }
-    }
-    
-    func sortResultsByCalories() {
-        results.sort { recipe1, recipe2 in
-            let calories1 = recipe1.calories ?? 0
-            let calories2 = recipe2.calories ?? 0
-            return calories1 < calories2
-        }
     }
 }
