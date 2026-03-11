@@ -29,8 +29,7 @@ struct RecipesListView: View {
     @Environment(\.dismiss) private var dismiss
     
     // MARK: - Constants
-    private let horizontalPadding: CGFloat = 45
-    private let buttonSize: CGFloat = 70 // Уменьшаем размер кнопок
+    private let buttonSize: CGFloat = 80 // Размер кнопок как в SearchView
     
     // MARK: - Computed Properties
     
@@ -46,73 +45,46 @@ struct RecipesListView: View {
 
             ScrollView {
 
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(spacing: 20) {
 
                     // Поиск
                     searchField
-                        .padding(.horizontal, horizontalPadding)
+                        .padding(.horizontal, 16)
                     
-                    // Фильтры
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Фильтры")
-                            .font(.headline)
-                            .padding(.horizontal, horizontalPadding)
-                        
-                        filtersRow
-                            .padding(.horizontal, horizontalPadding)
-                    }
+                    // Фильтры в одну строку (как в SearchView)
+                    filtersRow
+                        .padding(.horizontal, 8)
 
                     if isLoading {
 
                         ProgressView()
-                            .frame(maxWidth: .infinity)
                             .padding(.top, 40)
 
                     } else if let errorText = errorText {
 
                         errorView(errorText: errorText)
-                            .padding(.horizontal, horizontalPadding)
+                            .padding(.horizontal, 8)
 
                     } else if filteredItems.isEmpty {
 
                         emptyView()
-                            .padding(.horizontal, horizontalPadding)
+                            .padding(.horizontal, 8)
 
                     } else {
 
-                        // Результаты
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("Результаты")
-                                    .font(.headline)
-                                
-                                Text("\(filteredItems.count)")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(
-                                        Capsule()
-                                            .fill(.ultraThinMaterial)
-                                    )
-                                
-                                Spacer()
-                            }
-                            .padding(.horizontal, horizontalPadding)
-                            
-                            recipesList
-                                .padding(.horizontal, horizontalPadding)
-                        }
+                        resultsSection
+                            .padding(.horizontal, 8)
                     }
                     
                     // Кнопка управления удалением
                     if !hasActiveFilters {
                         deleteManagementButton
-                            .padding(.horizontal, horizontalPadding)
+                            .padding(.horizontal, 16)
                             .padding(.top, 10)
                     }
                 }
-                .padding(.vertical, 20)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 16)
             }
         }
         .navigationTitle(category.displayName)
@@ -176,13 +148,13 @@ struct RecipesListView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 24)
+            RoundedRectangle(cornerRadius: 16)
                 .fill(.ultraThinMaterial)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 24)
+            RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.white.opacity(0.2), lineWidth: 1)
         )
         .frame(maxWidth: .infinity)
@@ -272,12 +244,12 @@ struct RecipesListView: View {
             .frame(maxWidth: .infinity)
             .padding()
             .background(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(.regularMaterial)
             )
             .foregroundColor(.red)
             .overlay(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: 16)
                     .stroke(Color.red.opacity(0.3), lineWidth: 1)
             )
         }
@@ -301,12 +273,12 @@ struct RecipesListView: View {
             .frame(maxWidth: .infinity)
             .padding()
             .background(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(.regularMaterial)
             )
             .foregroundColor(.red)
             .overlay(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: 16)
                     .stroke(Color.red.opacity(0.3), lineWidth: 1)
             )
         }
@@ -342,14 +314,14 @@ struct RecipesListView: View {
         Text(errorText)
             .foregroundStyle(.red)
             .frame(maxWidth: .infinity)
-            .padding(.top, 30)
+            .padding(.top, 20)
     }
     
     func emptyView() -> some View {
         VStack(spacing: 20) {
             if !searchText.isEmpty || hasActiveFilters {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 60))
+                    .font(.system(size: 50))
                     .foregroundStyle(.secondary)
                 
                 Text("Ничего не найдено")
@@ -361,6 +333,7 @@ struct RecipesListView: View {
                     .font(.subheadline)
                     .foregroundStyle(.tertiary)
                     .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
                 
                 Button("Сбросить фильтры") {
                     resetFilters()
@@ -373,7 +346,7 @@ struct RecipesListView: View {
                 Text("В этой категории нет рецептов")
                     .font(.headline)
                     .foregroundStyle(.secondary)
-                    .padding(.top, 30)
+                    .padding(.top, 20)
                 
                 deleteCategoryButton
                     .padding(.top, 10)
@@ -406,43 +379,40 @@ private extension RecipesListView {
 private extension RecipesListView {
 
     var filtersRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 15) {
-                
-                filterButton(
-                    image: "mouse_watch",
-                    title: "до 30 мин",
-                    isActive: filter30
-                ) {
-                    filter30.toggle()
-                }
-                
-                filterButton(
-                    image: "mouse_cube",
-                    title: "Сюрприз",
-                    isActive: false
-                ) {
-                    surpriseMe()
-                }
-                
-                cuisineFilterButton
-                
-                filterButton(
-                    image: "mouse_weight",
-                    title: "Калории",
-                    isActive: sortByCalories
-                ) {
-                    sortByCalories.toggle()
-                }
-                
-                if hasActiveFilters {
-                    resetFilterButton
-                }
+        HStack(spacing: 12) {
+            
+            filterButton(
+                image: "mouse_watch",
+                title: "до 30 мин",
+                isActive: filter30
+            ) {
+                filter30.toggle()
             }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 8)
+            
+            filterButton(
+                image: "mouse_cube",
+                title: "Сюрприз",
+                isActive: false
+            ) {
+                surpriseMe()
+            }
+            
+            cuisineMenuButton
+            
+            filterButton(
+                image: "mouse_weight",
+                title: "Калории",
+                isActive: sortByCalories
+            ) {
+                sortByCalories.toggle()
+            }
+            
+            if hasActiveFilters {
+                resetFilterButton
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 8)
+        .frame(maxWidth: .infinity)
     }
 
     func filterButton(
@@ -451,29 +421,30 @@ private extension RecipesListView {
         isActive: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-
         Button(action: action) {
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 Image(image)
                     .resizable()
                     .scaledToFit()
                     .frame(width: buttonSize, height: buttonSize)
                 
                 Text(title)
-                    .font(.caption2)
+                    .font(.caption)
                     .fontWeight(.medium)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
-                    .frame(width: buttonSize)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(height: 32)
             }
+            .frame(maxWidth: .infinity)
         }
         .buttonStyle(BounceButtonStyle())
         .opacity(isActive ? 0.6 : 1.0)
     }
     
-    // MARK: - Cuisine Filter Button
+    // MARK: - Cuisine Menu Button
     
-    private var cuisineFilterButton: some View {
+    private var cuisineMenuButton: some View {
         Menu {
             Button("Все кухни") {
                 selectedCuisineId = nil
@@ -488,7 +459,7 @@ private extension RecipesListView {
                 }
             }
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 ZStack(alignment: .bottomTrailing) {
                     Image("mouse_world")
                         .resizable()
@@ -497,20 +468,21 @@ private extension RecipesListView {
                     
                     if selectedCuisineId != nil {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.caption2)
                             .foregroundStyle(.mint)
                             .background(Circle().fill(.white))
-                            .offset(x: 4, y: 4)
+                            .offset(x: 5, y: 5)
                     }
                 }
                 
                 Text(selectedCuisineName)
-                    .font(.caption2)
+                    .font(.caption)
                     .fontWeight(.medium)
-                    .lineLimit(2)
                     .multilineTextAlignment(.center)
-                    .frame(width: buttonSize)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(height: 32)
             }
+            .frame(maxWidth: .infinity)
         }
         .buttonStyle(BounceButtonStyle())
     }
@@ -527,43 +499,77 @@ private extension RecipesListView {
         Button {
             resetFilters()
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 ZStack {
                     Circle()
                         .fill(.ultraThinMaterial)
                         .frame(width: buttonSize, height: buttonSize)
                     
                     Image(systemName: "xmark")
-                        .font(.headline)
+                        .font(.title2)
                         .foregroundStyle(.secondary)
                 }
                 
                 Text("Сброс")
-                    .font(.caption2)
+                    .font(.caption)
                     .fontWeight(.medium)
                     .foregroundStyle(.secondary)
-                    .frame(width: buttonSize)
+                    .frame(height: 32)
             }
+            .frame(maxWidth: .infinity)
         }
         .buttonStyle(BounceButtonStyle())
     }
 }
 
-// MARK: List
+// MARK: Results Section
 private extension RecipesListView {
 
-    var recipesList: some View {
-        LazyVStack(spacing: 16) {
-            ForEach(filteredItems) { recipe in
-                NavigationLink {
-                    RecipeDetailView(recipeId: recipe.id)
-                } label: {
-                    RecipeCardRow(recipe: recipe)
+    var resultsSection: some View {
+        VStack(spacing: 12) {
+            // Заголовок по центру
+            HStack {
+                Spacer()
+                
+                VStack(spacing: 2) {
+                    Text("Результаты")
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                    
+                    Text("\(filteredItems.count) \(recipeWord(for: filteredItems.count))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(PlainButtonStyle())
+                
+                Spacer()
+            }
+            .padding(.vertical, 4)
+            
+            // Карточки рецептов
+            LazyVStack(spacing: 12) {
+                ForEach(filteredItems) { recipe in
+                    NavigationLink {
+                        RecipeDetailView(recipeId: recipe.id)
+                    } label: {
+                        RecipeCardRow(recipe: recipe)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
             }
         }
-        .padding(.top, 15)
+    }
+    
+    private func recipeWord(for count: Int) -> String {
+        let mod10 = count % 10
+        let mod100 = count % 100
+        
+        if mod10 == 1 && mod100 != 11 {
+            return "рецепт"
+        } else if mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20) {
+            return "рецепта"
+        } else {
+            return "рецептов"
+        }
     }
 }
 
@@ -591,26 +597,45 @@ private struct RecipeCardRow: View {
 
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(recipe.title)
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .lineLimit(2)
-
-                HStack(spacing: 12) {
+                
+                HStack(spacing: 6) {
                     // Время
-                    Label(recipe.timeText, systemImage: "clock")
-                        .font(.caption)
+                    HStack(spacing: 2) {
+                        Image(systemName: "clock")
+                            .font(.caption2)
+                        Text(recipe.timeText)
+                            .font(.caption2)
+                    }
                     
                     // Сложность
-                    Label(recipe.difficultyText, systemImage: difficultyIcon(recipe.difficulty))
-                        .font(.caption)
+                    if !recipe.difficultyText.isEmpty {
+                        Text("•")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        
+                        Text(recipe.difficultyText)
+                            .font(.caption2)
+                    }
                     
                     // Калории
                     if let calories = recipe.calories, calories > 0 {
-                        Label("\(calories) ккал", systemImage: "flame")
-                            .font(.caption)
-                            .foregroundStyle(caloriesColor(calories))
+                        Text("•")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        
+                        HStack(spacing: 2) {
+                            Image(systemName: "flame")
+                                .font(.caption2)
+                                .foregroundStyle(caloriesColor(calories))
+                            Text("\(calories) ккал")
+                                .font(.caption2)
+                                .foregroundStyle(caloriesColor(calories))
+                        }
                     }
                 }
                 .foregroundStyle(.secondary)
@@ -620,32 +645,24 @@ private struct RecipeCardRow: View {
             
             Image(systemName: "chevron.right")
                 .foregroundStyle(.secondary)
-                .font(.caption)
+                .font(.caption2)
         }
-        .padding(20)
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 24)
+            RoundedRectangle(cornerRadius: 20)
                 .fill(.ultraThinMaterial)
                 .opacity(0.7)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 24)
+            RoundedRectangle(cornerRadius: 20)
                 .stroke(Color.white.opacity(0.2), lineWidth: 1)
         )
         .shadow(
             color: .black.opacity(0.1),
-            radius: 12,
+            radius: 10,
             x: 0,
-            y: 6
+            y: 4
         )
-    }
-    
-    private func difficultyIcon(_ difficulty: String) -> String {
-        switch difficulty {
-        case "easy": return "hand.thumbsup"
-        case "hard": return "exclamationmark.triangle"
-        default: return "equal"
-        }
     }
     
     private func caloriesColor(_ calories: Int) -> Color {
