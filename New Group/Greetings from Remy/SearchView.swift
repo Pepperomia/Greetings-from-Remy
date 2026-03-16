@@ -84,9 +84,6 @@ struct SearchView: View {
                 isSearchFocused = false
             }
         }
-        .onAppear {
-            loadInitialData()
-        }
         .onChange(of: filter30) { _, _ in
             applyFilters()
         }

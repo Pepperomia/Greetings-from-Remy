@@ -3,7 +3,7 @@ import Foundation
 enum DatabaseBootstrap {
     // MARK: - Configuration
     
-    static let dbFileName = "recipes_app_seed_final.sqlite"
+    static let dbFileName = "recipes_app_seed_final.db"
     static let appDirectoryName = "GreetingsFromRemy"
     
     // MARK: - Public Methods
@@ -35,42 +35,29 @@ enum DatabaseBootstrap {
     /// Копирует базу данных из Bundle в Application Support (если её там нет)
     @discardableResult
     static func ensureDatabaseCopiedFromBundle() -> Bool {
+
         let destinationURL = appDatabaseURL()
         let fileManager = FileManager.default
-        
-        // Проверяем, есть ли уже база
+
+        // если база уже есть — не копируем
         if fileManager.fileExists(atPath: destinationURL.path) {
-            print("✅ База данных уже существует: \(destinationURL.lastPathComponent)")
+            print("✅ База уже существует:", destinationURL.lastPathComponent)
             return true
         }
-        
-        // Ищем базу в Bundle
-        guard let sourceURL = Bundle.main.url(forResource: dbFileName.replacingOccurrences(of: ".sqlite", with: ""),
-                                              withExtension: "sqlite") else {
-            print("❌ Файл базы данных не найден в Bundle. Убедись, что \(dbFileName) добавлен в проект.")
+
+        // ищем базу в bundle
+        guard let sourceURL = Bundle.main.url(forResource: "recipes_app_seed_final",
+                                              withExtension: "db") else {
+            print("❌ DB NOT FOUND IN BUNDLE")
             return false
         }
-        
+
         do {
             try fileManager.copyItem(at: sourceURL, to: destinationURL)
-            print("✅ База данных скопирована в: \(destinationURL.path)")
-            
-            // Проверяем, что файл действительно скопировался
-            var isDirectory: ObjCBool = false
-            let exists = fileManager.fileExists(atPath: destinationURL.path, isDirectory: &isDirectory)
-            
-            if exists && !isDirectory.boolValue {
-                print("✅ Файл успешно скопирован и доступен")
-                return true
-            } else {
-                print("⚠️ Файл скопирован, но не удаётся проверить его доступность")
-                return false
-            }
-            
-        } catch let error as NSError {
-            print("❌ Ошибка копирования базы данных: \(error.localizedDescription)")
-            print("   Код ошибки: \(error.code)")
-            print("   Детали: \(error.userInfo)")
+            print("📦 DB copied to:", destinationURL.path)
+            return true
+        } catch {
+            print("❌ Copy error:", error.localizedDescription)
             return false
         }
     }

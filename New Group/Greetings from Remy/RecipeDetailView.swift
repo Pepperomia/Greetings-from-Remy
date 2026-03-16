@@ -406,7 +406,7 @@ struct RecipeDetailView: View {
     }
     
     // MARK: - Ingredients
-    
+        
     private var ingredientsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             sectionHeader("Ингредиенты")
@@ -425,21 +425,37 @@ struct RecipeDetailView: View {
                                 .font(.title3)
                                 .frame(width: 15, alignment: .leading)
                             
-                            Text(ingredient.name)
-                                .font(.body)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            
-                            Text(ingredient.amountText.isEmpty ? "—" : ingredient.amountText)
-                                .foregroundStyle(.secondary)
-                                .font(.subheadline)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule()
-                                        .fill(.ultraThinMaterial)
-                                )
-                                .fixedSize(horizontal: true, vertical: false)
+                            // В RecipeDetailView, внутри ingredientsSection:
+
+                            Button {
+                                print("🔄 Добавляем в список: '\(ingredient.name)' — '\(ingredient.amountText)'")
+                                
+                                do {
+                                    try DatabaseManager.shared.addShoppingItem(
+                                        name: ingredient.name,        // ← проверь, что name не пустой!
+                                        amountText: ingredient.amountText
+                                    )
+                                    print("✅ Успешно добавлено")
+                                } catch {
+                                    print("❌ Ошибка добавления в список:", error)
+                                }
+                            } label: {
+                                HStack {
+                                    Image(systemName: "cart.badge.plus")
+                                        .foregroundStyle(.mint)
+                                    
+                                    Text(ingredient.name)
+                                        .foregroundStyle(.primary)
+                                    
+                                    Spacer()
+                                    
+                                    if !ingredient.amountText.isEmpty {
+                                        Text(ingredient.amountText)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding(.vertical, 6)
@@ -457,7 +473,6 @@ struct RecipeDetailView: View {
         )
         .shadow(color: .black.opacity(0.1), radius: 15, x: 0, y: 8)
     }
-    
     // MARK: - Instructions
     
     private func instructionsSection(_ detail: RecipeDetail) -> some View {

@@ -5,29 +5,237 @@ final class DatabaseManager {
 
     static let shared = DatabaseManager()
     private var db: OpaquePointer?
+    
+    // MARK: - Очередь для последовательного доступа к базе данных
+    private let dbQueue = DispatchQueue(label: "db.queue", qos: .userInitiated)
+    
+    // MARK: - Warmup (вызывается при старте приложения)
+    
+    func warmup() {
+        do {
+            try open()
+            print("✅ Database warmed up successfully")
+        } catch {
+            print("❌ DB warmup error:", error)
+        }
+    }
 
     private init() {}
 
     // MARK: OPEN
 
     private func open() throws {
-
         if db != nil { return }
 
         let url = DatabaseBootstrap.appDatabaseURL()
 
         if sqlite3_open(url.path, &db) != SQLITE_OK {
-
             let msg = String(cString: sqlite3_errmsg(db))
             sqlite3_close(db)
             db = nil
-
             throw NSError(
                 domain: "DatabaseManager",
                 code: 1,
                 userInfo: [NSLocalizedDescriptionKey: msg]
             )
         }
+    
+        sqlite3_exec(db, "PRAGMA cache_size = -20000;", nil, nil, nil)
+        sqlite3_exec(db, "PRAGMA journal_mode = WAL;", nil, nil, nil)
+        sqlite3_exec(db, "PRAGMA temp_store = MEMORY;", nil, nil, nil)
+
+        createIndexes()
+        createShoppingTable()
+    }
+    
+    private func createShoppingTable() {
+        let sql = """
+        CREATE TABLE IF NOT EXISTS shopping_list (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            amount_text TEXT,
+            is_checked INTEGER DEFAULT 0
+        );
+        """
+        sqlite3_exec(db, sql, nil, nil, nil)
+    }
+    
+    // MARK: - Shopping List Methods
+    
+    func addShoppingItem(name: String, amountText: String?) throws {
+
+        try open()
+
+        let sql = """
+        INSERT INTO shopping_list (name, amount_text, is_checked)
+        VALUES (?, ?, 0);
+        """
+
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
+            throw NSError(domain: "DatabaseManager",
+                          code: 900,
+                          userInfo: [NSLocalizedDescriptionKey: lastError()])
+        }
+
+        sqlite3_bind_text(stmt, 1, (name as NSString).utf8String, -1, nil)
+
+        if let amountText {
+            sqlite3_bind_text(stmt, 2, (amountText as NSString).utf8String, -1, nil)
+        } else {
+            sqlite3_bind_null(stmt, 2)
+        }
+
+        if sqlite3_step(stmt) != SQLITE_DONE {
+            throw NSError(domain: "DatabaseManager",
+                          code: 901,
+                          userInfo: [NSLocalizedDescriptionKey: lastError()])
+        }
+
+        print("🛒 added:", name, amountText ?? "")
+    }
+    
+    func fetchShoppingList() throws -> [ShoppingItem] {
+        try open()
+        
+        let sql = """
+        SELECT id, name, amount_text, is_checked
+        FROM shopping_list
+        ORDER BY is_checked, name;
+        """
+        
+        var stmt: OpaquePointer?
+        var items: [ShoppingItem] = []
+        
+        defer { sqlite3_finalize(stmt) }
+        
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
+            throw NSError(domain: "DatabaseManager",
+                          code: 910,
+                          userInfo: [NSLocalizedDescriptionKey: lastError()])
+        }
+        
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let id = Int(sqlite3_column_int(stmt, 0))
+            let name = String(cString: sqlite3_column_text(stmt, 1))
+            let amountPointer = sqlite3_column_text(stmt, 2)
+            let amount = amountPointer != nil ? String(cString: amountPointer!) : nil
+            let checked = sqlite3_column_int(stmt, 3) == 1
+            
+            items.append(ShoppingItem(
+                id: id,
+                name: name,
+                amountText: amount,
+                isChecked: checked
+            ))
+        }
+        
+        print("📋 Загружено \(items.count) товаров")
+        return items
+    }
+    
+    func toggleShoppingItem(id: Int) throws {
+        let sql = """
+        UPDATE shopping_list
+        SET is_checked = CASE WHEN is_checked = 0 THEN 1 ELSE 0 END
+        WHERE id = ?;
+        """
+        
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+        
+        try open()
+        
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
+            throw NSError(domain: "DatabaseManager",
+                          code: 902,
+                          userInfo: [NSLocalizedDescriptionKey: lastError()])
+        }
+        
+        sqlite3_bind_int(stmt, 1, Int32(id))
+        
+        if sqlite3_step(stmt) != SQLITE_DONE {
+            throw NSError(domain: "DatabaseManager",
+                          code: 903,
+                          userInfo: [NSLocalizedDescriptionKey: lastError()])
+        }
+    }
+
+    func deleteShoppingItem(id: Int) throws {
+        let sql = "DELETE FROM shopping_list WHERE id = ?;"
+        
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+        
+        try open()
+        
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
+            throw NSError(domain: "DatabaseManager",
+                          code: 904,
+                          userInfo: [NSLocalizedDescriptionKey: lastError()])
+        }
+        
+        sqlite3_bind_int(stmt, 1, Int32(id))
+        
+        if sqlite3_step(stmt) != SQLITE_DONE {
+            throw NSError(domain: "DatabaseManager",
+                          code: 905,
+                          userInfo: [NSLocalizedDescriptionKey: lastError()])
+        }
+    }
+    
+    // ✅ НОВЫЙ МЕТОД ДЛЯ ОЧИСТКИ
+    func cleanShoppingList() throws {
+        try open()
+        
+        let deleteSQL = """
+        DELETE FROM shopping_list 
+        WHERE name IS NULL 
+           OR trim(name) = '' 
+           OR name = ' '
+           OR length(trim(name)) = 0;
+        """
+        
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+        
+        if sqlite3_prepare_v2(db, deleteSQL, -1, &stmt, nil) != SQLITE_OK {
+            throw NSError(domain: "DatabaseManager",
+                         code: 920,
+                         userInfo: [NSLocalizedDescriptionKey: lastError()])
+        }
+        
+        if sqlite3_step(stmt) != SQLITE_DONE {
+            throw NSError(domain: "DatabaseManager",
+                         code: 921,
+                         userInfo: [NSLocalizedDescriptionKey: lastError()])
+        }
+        
+        let count = sqlite3_changes(db)
+        print("🧹 Удалено \(count) записей с пустыми названиями")
+    }
+    
+    // MARK: - Create Indexes
+    
+    private func createIndexes() {
+        let idxRecipesTitle = "CREATE INDEX IF NOT EXISTS idx_recipes_title ON recipes(title);"
+        sqlite3_exec(db, idxRecipesTitle, nil, nil, nil)
+        
+        let idxIngredientsName = "CREATE INDEX IF NOT EXISTS idx_ingredients_name ON ingredients(name);"
+        sqlite3_exec(db, idxIngredientsName, nil, nil, nil)
+        
+        let idxRecipeIngredientsRecipe = "CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe ON recipe_ingredients(recipe_id);"
+        sqlite3_exec(db, idxRecipeIngredientsRecipe, nil, nil, nil)
+        
+        let idxRecipeIngredientsIngredient = "CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_ingredient ON recipe_ingredients(ingredient_id);"
+        sqlite3_exec(db, idxRecipeIngredientsIngredient, nil, nil, nil)
+        
+        let idxCuisineId = "CREATE INDEX IF NOT EXISTS idx_recipes_cuisine ON recipes(cuisine_id);"
+        sqlite3_exec(db, idxCuisineId, nil, nil, nil)
+        
+        print("✅ Индексы созданы/проверены")
     }
     
     // MARK: - Last Error Helper
@@ -44,50 +252,47 @@ final class DatabaseManager {
         parameters: [Any] = [],
         mapRow: (SQLiteRow) -> T
     ) throws -> [T] {
+        
+        return try dbQueue.sync {
+            try open()
 
-        try open()
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
 
-        var stmt: OpaquePointer?
-        defer { sqlite3_finalize(stmt) }
-
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
-
-            let msg = String(cString: sqlite3_errmsg(db))
-
-            throw NSError(
-                domain: "DatabaseManager",
-                code: 2,
-                userInfo: [NSLocalizedDescriptionKey: msg]
-            )
-        }
-
-        for (idx, param) in parameters.enumerated() {
-
-            let bind = Int32(idx + 1)
-
-            if let intVal = param as? Int {
-                sqlite3_bind_int(stmt, bind, Int32(intVal))
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+                let msg = String(cString: sqlite3_errmsg(db))
+                throw NSError(
+                    domain: "DatabaseManager",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: msg]
+                )
             }
-            else if let strVal = param as? String {
-                sqlite3_bind_text(stmt, bind, (strVal as NSString).utf8String, -1, nil)
+
+            for (idx, param) in parameters.enumerated() {
+                let bind = Int32(idx + 1)
+
+                if let intVal = param as? Int {
+                    sqlite3_bind_int(stmt, bind, Int32(intVal))
+                }
+                else if let strVal = param as? String {
+                    sqlite3_bind_text(stmt, bind, (strVal as NSString).utf8String, -1, nil)
+                }
             }
+
+            var results: [T] = []
+
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let row = SQLiteRow(statement: stmt)
+                results.append(mapRow(row))
+            }
+
+            return results
         }
-
-        var results: [T] = []
-
-        while sqlite3_step(stmt) == SQLITE_ROW {
-
-            let row = SQLiteRow(statement: stmt)
-            results.append(mapRow(row))
-        }
-
-        return results
     }
 
     // MARK: CATEGORIES
 
     func fetchCategories() throws -> [CategoryRow] {
-
         let sql = """
         SELECT c.id, c.name, COUNT(r.id)
         FROM categories c
@@ -115,45 +320,43 @@ final class DatabaseManager {
                          userInfo: [NSLocalizedDescriptionKey: "Название категории не может быть пустым"])
         }
         
-        try open()
-        
-        // Проверяем, существует ли уже такая категория
         let checkSQL = "SELECT id FROM categories WHERE name = ? LIMIT 1;"
         let existing: [Int] = try runQuery(checkSQL, parameters: [trimmed]) { row in
             row[0] as? Int ?? 0
         }
         
         if let id = existing.first, id > 0 {
-            return id // Возвращаем существующий ID
+            return id
         }
         
-        // Добавляем новую категорию
         let insertSQL = """
         INSERT INTO categories (name, sort_order) 
         VALUES (?, (SELECT IFNULL(MAX(sort_order), 0) + 1 FROM categories));
         """
         
-        var stmt: OpaquePointer?
-        defer { sqlite3_finalize(stmt) }
-        
-        if sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) != SQLITE_OK {
-            throw NSError(domain: "DatabaseManager",
-                         code: 500,
-                         userInfo: [NSLocalizedDescriptionKey: lastError()])
+        return try dbQueue.sync {
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            
+            if sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) != SQLITE_OK {
+                throw NSError(domain: "DatabaseManager",
+                             code: 500,
+                             userInfo: [NSLocalizedDescriptionKey: lastError()])
+            }
+            
+            sqlite3_bind_text(stmt, 1, trimmed, -1, nil)
+            
+            if sqlite3_step(stmt) != SQLITE_DONE {
+                throw NSError(domain: "DatabaseManager",
+                             code: 501,
+                             userInfo: [NSLocalizedDescriptionKey: lastError()])
+            }
+            
+            let newId = Int(sqlite3_last_insert_rowid(db))
+            print("✅ Добавлена категория: \(trimmed) (id: \(newId))")
+            
+            return newId
         }
-        
-        sqlite3_bind_text(stmt, 1, trimmed, -1, nil)
-        
-        if sqlite3_step(stmt) != SQLITE_DONE {
-            throw NSError(domain: "DatabaseManager",
-                         code: 501,
-                         userInfo: [NSLocalizedDescriptionKey: lastError()])
-        }
-        
-        let newId = Int(sqlite3_last_insert_rowid(db))
-        print("✅ Добавлена категория: \(trimmed) (id: \(newId))")
-        
-        return newId
     }
     
     // MARK: - Add Cuisine
@@ -166,48 +369,45 @@ final class DatabaseManager {
                          userInfo: [NSLocalizedDescriptionKey: "Название кухни не может быть пустым"])
         }
         
-        try open()
-        
-        // Проверяем, существует ли уже такая кухня
         let checkSQL = "SELECT id FROM cuisines WHERE name = ? LIMIT 1;"
         let existing: [Int] = try runQuery(checkSQL, parameters: [trimmed]) { row in
             row[0] as? Int ?? 0
         }
         
         if let id = existing.first, id > 0 {
-            return id // Возвращаем существующий ID
+            return id
         }
         
-        // Добавляем новую кухню
         let insertSQL = "INSERT INTO cuisines (name) VALUES (?);"
         
-        var stmt: OpaquePointer?
-        defer { sqlite3_finalize(stmt) }
-        
-        if sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) != SQLITE_OK {
-            throw NSError(domain: "DatabaseManager",
-                         code: 500,
-                         userInfo: [NSLocalizedDescriptionKey: lastError()])
+        return try dbQueue.sync {
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            
+            if sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) != SQLITE_OK {
+                throw NSError(domain: "DatabaseManager",
+                             code: 500,
+                             userInfo: [NSLocalizedDescriptionKey: lastError()])
+            }
+            
+            sqlite3_bind_text(stmt, 1, trimmed, -1, nil)
+            
+            if sqlite3_step(stmt) != SQLITE_DONE {
+                throw NSError(domain: "DatabaseManager",
+                             code: 501,
+                             userInfo: [NSLocalizedDescriptionKey: lastError()])
+            }
+            
+            let newId = Int(sqlite3_last_insert_rowid(db))
+            print("✅ Добавлена кухня: \(trimmed) (id: \(newId))")
+            
+            return newId
         }
-        
-        sqlite3_bind_text(stmt, 1, trimmed, -1, nil)
-        
-        if sqlite3_step(stmt) != SQLITE_DONE {
-            throw NSError(domain: "DatabaseManager",
-                         code: 501,
-                         userInfo: [NSLocalizedDescriptionKey: lastError()])
-        }
-        
-        let newId = Int(sqlite3_last_insert_rowid(db))
-        print("✅ Добавлена кухня: \(trimmed) (id: \(newId))")
-        
-        return newId
     }
     
     // MARK: - Cuisines
 
     func fetchCuisines() throws -> [CuisineRow] {
-        
         let sql = """
         SELECT id, name
         FROM cuisines
@@ -243,15 +443,11 @@ final class DatabaseManager {
         carbs: Double? = nil
     ) throws {
         
-        try open()
-        
         var cuisineId: Int? = nil
         
-        // Если указана кухня, находим или создаем её
         if let cuisineName, !cuisineName.trimmingCharacters(in: .whitespaces).isEmpty {
             let trimmed = cuisineName.trimmingCharacters(in: .whitespacesAndNewlines)
             
-            // Проверяем существующую кухню
             let existing: [Int] = try runQuery(
                 "SELECT id FROM cuisines WHERE name = ? LIMIT 1;",
                 parameters: [trimmed]
@@ -260,12 +456,10 @@ final class DatabaseManager {
             if let id = existing.first {
                 cuisineId = id
             } else {
-                // Создаем новую кухню
                 cuisineId = try addCuisine(name: trimmed)
             }
         }
         
-        // Вставляем рецепт
         let sql = """
         INSERT INTO recipes
         (title, category_id, cuisine_id, difficulty,
@@ -274,55 +468,55 @@ final class DatabaseManager {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0);
         """
         
-        var stmt: OpaquePointer?
-        defer { sqlite3_finalize(stmt) }
-        
-        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
-            throw NSError(domain: "DatabaseManager",
-                         code: 1,
-                         userInfo: [NSLocalizedDescriptionKey: "Ошибка подготовки запроса: \(lastError())"])
+        try dbQueue.sync {
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
+                throw NSError(domain: "DatabaseManager",
+                             code: 1,
+                             userInfo: [NSLocalizedDescriptionKey: "Ошибка подготовки запроса: \(lastError())"])
+            }
+            
+            sqlite3_bind_text(stmt, 1, title, -1, nil)
+            sqlite3_bind_int(stmt, 2, Int32(categoryId))
+            
+            if let cuisineId {
+                sqlite3_bind_int(stmt, 3, Int32(cuisineId))
+            } else {
+                sqlite3_bind_null(stmt, 3)
+            }
+            
+            sqlite3_bind_text(stmt, 4, difficulty, -1, nil)
+            sqlite3_bind_int(stmt, 5, Int32(timeMinutes))
+            
+            let timeText = "\(timeMinutes) мин"
+            sqlite3_bind_text(stmt, 6, timeText, -1, nil)
+            
+            if let servingsText {
+                sqlite3_bind_text(stmt, 7, servingsText, -1, nil)
+            } else {
+                sqlite3_bind_null(stmt, 7)
+            }
+            
+            sqlite3_bind_text(stmt, 8, instructions, -1, nil)
+            
+            sqlite3_bind_double(stmt, 9, calories ?? 0)
+            sqlite3_bind_double(stmt, 10, protein ?? 0)
+            sqlite3_bind_double(stmt, 11, fat ?? 0)
+            sqlite3_bind_double(stmt, 12, carbs ?? 0)
+            
+            if sqlite3_step(stmt) != SQLITE_DONE {
+                throw NSError(domain: "DatabaseManager",
+                             code: 2,
+                             userInfo: [NSLocalizedDescriptionKey: "Ошибка вставки рецепта: \(lastError())"])
+            }
+            
+            let recipeId = Int(sqlite3_last_insert_rowid(db))
+            print("✅ Добавлен рецепт: \(title) (id: \(recipeId))")
+            
+            try addIngredients(recipeId: recipeId, ingredientsLines: ingredientsLines)
         }
-        
-        // Биндим параметры
-        sqlite3_bind_text(stmt, 1, title, -1, nil)
-        sqlite3_bind_int(stmt, 2, Int32(categoryId))
-        
-        if let cuisineId {
-            sqlite3_bind_int(stmt, 3, Int32(cuisineId))
-        } else {
-            sqlite3_bind_null(stmt, 3)
-        }
-        
-        sqlite3_bind_text(stmt, 4, difficulty, -1, nil)
-        sqlite3_bind_int(stmt, 5, Int32(timeMinutes))
-        
-        let timeText = "\(timeMinutes) мин"
-        sqlite3_bind_text(stmt, 6, timeText, -1, nil)
-        
-        if let servingsText {
-            sqlite3_bind_text(stmt, 7, servingsText, -1, nil)
-        } else {
-            sqlite3_bind_null(stmt, 7)
-        }
-        
-        sqlite3_bind_text(stmt, 8, instructions, -1, nil)
-        
-        sqlite3_bind_double(stmt, 9, calories ?? 0)
-        sqlite3_bind_double(stmt, 10, protein ?? 0)
-        sqlite3_bind_double(stmt, 11, fat ?? 0)
-        sqlite3_bind_double(stmt, 12, carbs ?? 0)
-        
-        if sqlite3_step(stmt) != SQLITE_DONE {
-            throw NSError(domain: "DatabaseManager",
-                         code: 2,
-                         userInfo: [NSLocalizedDescriptionKey: "Ошибка вставки рецепта: \(lastError())"])
-        }
-        
-        let recipeId = Int(sqlite3_last_insert_rowid(db))
-        print("✅ Добавлен рецепт: \(title) (id: \(recipeId))")
-        
-        // Добавляем ингредиенты
-        try addIngredients(recipeId: recipeId, ingredientsLines: ingredientsLines)
     }
     
     // MARK: - Add Ingredients Helper
@@ -330,62 +524,49 @@ final class DatabaseManager {
     private func addIngredients(recipeId: Int, ingredientsLines: [String]) throws {
         print("📝 Добавление ингредиентов для рецепта \(recipeId)")
         
-        for (index, line) in ingredientsLines.enumerated() {
-            
-            // Проверяем разные возможные разделители
-            var parts: [String] = []
-            
-            if line.contains("—") {
-                parts = line.components(separatedBy: "—")
-            } else if line.contains("-") {
-                parts = line.components(separatedBy: "-")
-            } else if line.contains("–") {
-                parts = line.components(separatedBy: "–")
-            } else {
-                parts = [line, ""]
-            }
-            
-            let ingredientName = parts.first?.trimmingCharacters(in: .whitespaces) ?? ""
-            let amountText = parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespaces) : ""
-            
-            print("  📝 Строка: '\(line)'")
-            print("     → название: '\(ingredientName)'")
-            print("     → количество: '\(amountText)'")
-            
-            guard !ingredientName.isEmpty else {
-                print("     ⚠️ Пропускаем - пустое название")
-                continue
-            }
-            
-            // Находим или создаем ингредиент
-            let ingredientId = try findOrCreateIngredient(name: ingredientName)
-            print("     ✅ ID ингредиента: \(ingredientId)")
-            
-            // Связываем ингредиент с рецептом
-            let linkSQL = """
-            INSERT INTO recipe_ingredients
-            (recipe_id, ingredient_id, amount_text, sort_order)
-            VALUES (?, ?, ?, ?);
-            """
-            
-            var linkStmt: OpaquePointer?
-            defer { sqlite3_finalize(linkStmt) }
-            
-            if sqlite3_prepare_v2(db, linkSQL, -1, &linkStmt, nil) == SQLITE_OK {
-                sqlite3_bind_int(linkStmt, 1, Int32(recipeId))
-                sqlite3_bind_int(linkStmt, 2, Int32(ingredientId))
-                sqlite3_bind_text(linkStmt, 3, amountText, -1, nil)
-                sqlite3_bind_int(linkStmt, 4, Int32(index))
+        try dbQueue.sync {
+            for (index, line) in ingredientsLines.enumerated() {
+                var parts: [String] = []
                 
-                if sqlite3_step(linkStmt) == SQLITE_DONE {
-                    print("     ✅ Сохранено: \(ingredientName) -> '\(amountText)'")
+                if line.contains("—") {
+                    parts = line.components(separatedBy: "—")
+                } else if line.contains("-") {
+                    parts = line.components(separatedBy: "-")
+                } else if line.contains("–") {
+                    parts = line.components(separatedBy: "–")
                 } else {
-                    let error = String(cString: sqlite3_errmsg(db))
-                    print("     ❌ Ошибка: \(error)")
+                    parts = [line, ""]
                 }
-            } else {
-                let error = String(cString: sqlite3_errmsg(db))
-                print("     ❌ Ошибка подготовки: \(error)")
+                
+                let ingredientName = parts.first?.trimmingCharacters(in: .whitespaces) ?? ""
+                let amountText = parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespaces) : ""
+                
+                guard !ingredientName.isEmpty else {
+                    print("     ⚠️ Пропускаем - пустое название")
+                    continue
+                }
+                
+                let ingredientId = try findOrCreateIngredient(name: ingredientName)
+                
+                let linkSQL = """
+                INSERT INTO recipe_ingredients
+                (recipe_id, ingredient_id, amount_text, sort_order)
+                VALUES (?, ?, ?, ?);
+                """
+                
+                var linkStmt: OpaquePointer?
+                defer { sqlite3_finalize(linkStmt) }
+                
+                if sqlite3_prepare_v2(db, linkSQL, -1, &linkStmt, nil) == SQLITE_OK {
+                    sqlite3_bind_int(linkStmt, 1, Int32(recipeId))
+                    sqlite3_bind_int(linkStmt, 2, Int32(ingredientId))
+                    sqlite3_bind_text(linkStmt, 3, amountText, -1, nil)
+                    sqlite3_bind_int(linkStmt, 4, Int32(index))
+                    
+                    if sqlite3_step(linkStmt) == SQLITE_DONE {
+                        print("     ✅ Сохранено: \(ingredientName) -> '\(amountText)'")
+                    }
+                }
             }
         }
     }
@@ -395,7 +576,6 @@ final class DatabaseManager {
     private func findOrCreateIngredient(name: String) throws -> Int {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // Ищем существующий ингредиент
         let findSQL = "SELECT id FROM ingredients WHERE name = ? LIMIT 1;"
         let existing: [Int] = try runQuery(findSQL, parameters: [trimmed]) { row in
             row[0] as? Int ?? 0
@@ -405,26 +585,28 @@ final class DatabaseManager {
             return id
         }
         
-        // Создаем новый ингредиент
         let insertSQL = "INSERT INTO ingredients (name) VALUES (?);"
-        var insertStmt: OpaquePointer?
-        defer { sqlite3_finalize(insertStmt) }
         
-        if sqlite3_prepare_v2(db, insertSQL, -1, &insertStmt, nil) != SQLITE_OK {
-            throw NSError(domain: "DatabaseManager",
-                         code: 3,
-                         userInfo: [NSLocalizedDescriptionKey: "Ошибка создания ингредиента: \(lastError())"])
+        return try dbQueue.sync {
+            var insertStmt: OpaquePointer?
+            defer { sqlite3_finalize(insertStmt) }
+            
+            if sqlite3_prepare_v2(db, insertSQL, -1, &insertStmt, nil) != SQLITE_OK {
+                throw NSError(domain: "DatabaseManager",
+                             code: 3,
+                             userInfo: [NSLocalizedDescriptionKey: "Ошибка создания ингредиента: \(lastError())"])
+            }
+            
+            sqlite3_bind_text(insertStmt, 1, trimmed, -1, nil)
+            
+            if sqlite3_step(insertStmt) != SQLITE_DONE {
+                throw NSError(domain: "DatabaseManager",
+                             code: 4,
+                             userInfo: [NSLocalizedDescriptionKey: "Ошибка вставки ингредиента: \(lastError())"])
+            }
+            
+            return Int(sqlite3_last_insert_rowid(db))
         }
-        
-        sqlite3_bind_text(insertStmt, 1, trimmed, -1, nil)
-        
-        if sqlite3_step(insertStmt) != SQLITE_DONE {
-            throw NSError(domain: "DatabaseManager",
-                         code: 4,
-                         userInfo: [NSLocalizedDescriptionKey: "Ошибка вставки ингредиента: \(lastError())"])
-        }
-        
-        return Int(sqlite3_last_insert_rowid(db))
     }
     
     // MARK: RECIPES BY CATEGORY
@@ -451,11 +633,9 @@ final class DatabaseManager {
             let timeMinutes = row[2] as? Int ?? 0
             let difficulty = row[3] as? String ?? "medium"
             
-            // Получаем Double и конвертируем в Int
             let caloriesValue = row[4] as? Double
             let calories = caloriesValue.map { Int($0) }
             
-            // Получаем cuisine_id
             let cuisineId = row[5] as? Int
             
             return RecipeRow(
@@ -469,54 +649,109 @@ final class DatabaseManager {
         }
     }
     
+    // MARK: - Random Recipe ID
     
-    // MARK: SEARCH
-
-    func searchRecipes(query: String, cuisineId: Int? = nil) throws -> [RecipeRow] {
+    func randomRecipeId(
+        query: String,
+        ingredients: [String]? = nil,
+        categoryId: Int? = nil,
+        cuisineId: Int? = nil,
+        maxMinutes: Int? = nil,
+        onlyEasy: Bool
+    ) throws -> Int? {
+        
         var sql = """
-        SELECT DISTINCT r.id, r.title, r.time_minutes, r.difficulty, r.calories
+        SELECT r.id
         FROM recipes r
-        LEFT JOIN recipe_ingredients ri ON ri.recipe_id = r.id
-        LEFT JOIN ingredients i ON i.id = ri.ingredient_id
         WHERE r.is_archived = 0
-        AND (r.title LIKE ? OR i.name LIKE ?)
         """
         
-        var parameters: [Any] = ["%\(query)%", "%\(query)%"]
+        var parameters: [Any] = []
         
-        if let cuisineId = cuisineId {
+        if let categoryId {
+            sql += " AND r.category_id = ?"
+            parameters.append(categoryId)
+        }
+        
+        if let cuisineId {
             sql += " AND r.cuisine_id = ?"
             parameters.append(cuisineId)
         }
         
-        sql += " ORDER BY r.title LIMIT 200"
+        if let maxMinutes {
+            sql += " AND r.time_minutes <= ?"
+            parameters.append(maxMinutes)
+        }
         
+        if onlyEasy {
+            sql += " AND r.difficulty = 'easy'"
+        }
+        
+        if !query.isEmpty {
+            sql += " AND r.title LIKE ?"
+            parameters.append("\(query)%")
+        }
+        
+        if let ingredients, !ingredients.isEmpty {
+            for ingredient in ingredients {
+                sql += """
+                AND r.id IN (
+                    SELECT ri.recipe_id
+                    FROM recipe_ingredients ri
+                    JOIN ingredients i ON i.id = ri.ingredient_id
+                    WHERE i.name LIKE ?
+                )
+                """
+                parameters.append("\(ingredient)%")
+            }
+        }
+        
+        sql += " ORDER BY RANDOM() LIMIT 1"
+        
+        let results = try runQuery(sql, parameters: parameters) { row in
+            row[0] as? Int ?? 0
+        }
+        
+        return results.first
+    }
+    
+    // MARK: SEARCH - Поиск по названию рецепта
+    
+    func searchRecipes(query: String, cuisineId: Int? = nil) throws -> [RecipeRow] {
+        var sql = """
+        SELECT id, title, time_minutes, difficulty, calories
+        FROM recipes
+        WHERE is_archived = 0
+        AND title LIKE ?
+        """
+
+        var parameters: [Any] = ["\(query)%"]
+
+        if let cuisineId {
+            sql += " AND cuisine_id = ?"
+            parameters.append(cuisineId)
+        }
+
+        sql += " ORDER BY title LIMIT 200"
+
         return try runQuery(sql, parameters: parameters) { row in
-            let id = row[0] as? Int ?? 0
-            let title = row[1] as? String ?? ""
-            let timeMinutes = row[2] as? Int ?? 0
-            let difficulty = row[3] as? String ?? "medium"
-            
-            let caloriesValue = row[4] as? Double
-            let calories = caloriesValue.map { Int($0) }
-            
-            return RecipeRow(
-                id: id,
-                title: title,
-                timeMinutes: timeMinutes,
-                difficulty: difficulty,
-                calories: calories
+            RecipeRow(
+                id: row[0] as? Int ?? 0,
+                title: row[1] as? String ?? "",
+                timeMinutes: row[2] as? Int ?? 0,
+                difficulty: row[3] as? String ?? "medium",
+                calories: (row[4] as? Double).map { Int($0) }
             )
         }
     }
     
+    // MARK: SEARCH - Поиск по ингредиентам
+    
     func searchRecipesByIngredients(_ ingredients: [String], cuisineId: Int? = nil) throws -> [RecipeRow] {
         guard !ingredients.isEmpty else { return [] }
         
-        try open()
-        
         var sql = """
-        SELECT r.id, r.title, r.time_minutes, r.difficulty, r.calories
+        SELECT DISTINCT r.id, r.title, r.time_minutes, r.difficulty, r.calories
         FROM recipes r
         WHERE r.is_archived = 0
         """
@@ -532,33 +767,25 @@ final class DatabaseManager {
             """
         }
         
-        if cuisineId != nil {
+        if let cuisineId {
             sql += " AND r.cuisine_id = ?"
         }
         
         sql += "\nORDER BY r.title LIMIT 200"
         
-        var parameters: [Any] = ingredients.map { "%\($0)%" }
+        var parameters: [Any] = ingredients.map { "\($0)%" }
         
-        if let cuisineId = cuisineId {
+        if let cuisineId {
             parameters.append(cuisineId)
         }
         
         return try runQuery(sql, parameters: parameters) { row in
-            let id = row[0] as? Int ?? 0
-            let title = row[1] as? String ?? ""
-            let timeMinutes = row[2] as? Int ?? 0
-            let difficulty = row[3] as? String ?? "medium"
-            
-            let caloriesValue = row[4] as? Double
-            let calories = caloriesValue.map { Int($0) }
-            
-            return RecipeRow(
-                id: id,
-                title: title,
-                timeMinutes: timeMinutes,
-                difficulty: difficulty,
-                calories: calories
+            RecipeRow(
+                id: row[0] as? Int ?? 0,
+                title: row[1] as? String ?? "",
+                timeMinutes: row[2] as? Int ?? 0,
+                difficulty: row[3] as? String ?? "medium",
+                calories: (row[4] as? Double).map { Int($0) }
             )
         }
     }
@@ -604,10 +831,21 @@ final class DatabaseManager {
         }.filter { !$0.isEmpty }
     }
     
+    // MARK: - Recipe Count
+    
+    func recipeCount() throws -> Int {
+        let sql = "SELECT COUNT(*) FROM recipes WHERE is_archived = 0;"
+        
+        let result = try runQuery(sql) { row in
+            row[0] as? Int ?? 0
+        }
+        
+        return result.first ?? 0
+    }
+    
     // MARK: RECIPE DETAIL
 
     func fetchRecipeDetail(recipeId: Int) throws -> RecipeDetail {
-
         let sql = """
         SELECT r.id, r.title, c.name, cu.name, r.difficulty,
                r.time_minutes, r.servings_text, r.instructions,
@@ -620,7 +858,6 @@ final class DatabaseManager {
         """
 
         let rows = try runQuery(sql, parameters: [recipeId]) { row in
-
             let minutes = row[5] as? Int ?? 0
 
             return RecipeDetail(
@@ -641,7 +878,6 @@ final class DatabaseManager {
         }
 
         guard let recipe = rows.first else {
-
             throw NSError(
                 domain: "DatabaseManager",
                 code: 404,
@@ -671,8 +907,6 @@ final class DatabaseManager {
             let amountText = row[2] as? String ?? ""
             let sortOrder = row[3] as? Int ?? 0
             
-            print("   ✅ Ингредиент: \(name) - '\(amountText)'")
-            
             return IngredientLine(
                 id: id,
                 name: name,
@@ -700,15 +934,11 @@ final class DatabaseManager {
         carbs: Double? = nil
     ) throws {
         
-        try open()
-        
         var cuisineId: Int? = nil
         
-        // Если указана кухня, находим или создаем её
         if let cuisineName, !cuisineName.trimmingCharacters(in: .whitespaces).isEmpty {
             let trimmed = cuisineName.trimmingCharacters(in: .whitespacesAndNewlines)
             
-            // Проверяем существующую кухню
             let existing: [Int] = try runQuery(
                 "SELECT id FROM cuisines WHERE name = ? LIMIT 1;",
                 parameters: [trimmed]
@@ -717,12 +947,10 @@ final class DatabaseManager {
             if let id = existing.first {
                 cuisineId = id
             } else {
-                // Создаем новую кухню
                 cuisineId = try addCuisine(name: trimmed)
             }
         }
         
-        // Обновляем рецепт
         let sql = """
         UPDATE recipes 
         SET title = ?,
@@ -740,66 +968,65 @@ final class DatabaseManager {
         WHERE id = ? AND is_archived = 0;
         """
         
-        var stmt: OpaquePointer?
-        defer { sqlite3_finalize(stmt) }
-        
-        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
-            throw NSError(domain: "DatabaseManager",
-                         code: 5,
-                         userInfo: [NSLocalizedDescriptionKey: "Ошибка подготовки запроса: \(lastError())"])
+        try dbQueue.sync {
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
+                throw NSError(domain: "DatabaseManager",
+                             code: 5,
+                             userInfo: [NSLocalizedDescriptionKey: "Ошибка подготовки запроса: \(lastError())"])
+            }
+            
+            sqlite3_bind_text(stmt, 1, title, -1, nil)
+            sqlite3_bind_int(stmt, 2, Int32(categoryId))
+            
+            if let cuisineId {
+                sqlite3_bind_int(stmt, 3, Int32(cuisineId))
+            } else {
+                sqlite3_bind_null(stmt, 3)
+            }
+            
+            sqlite3_bind_text(stmt, 4, difficulty, -1, nil)
+            sqlite3_bind_int(stmt, 5, Int32(timeMinutes))
+            
+            let timeText = "\(timeMinutes) мин"
+            sqlite3_bind_text(stmt, 6, timeText, -1, nil)
+            
+            if let servingsText {
+                sqlite3_bind_text(stmt, 7, servingsText, -1, nil)
+            } else {
+                sqlite3_bind_null(stmt, 7)
+            }
+            
+            sqlite3_bind_text(stmt, 8, instructions, -1, nil)
+            
+            sqlite3_bind_double(stmt, 9, calories ?? 0)
+            sqlite3_bind_double(stmt, 10, protein ?? 0)
+            sqlite3_bind_double(stmt, 11, fat ?? 0)
+            sqlite3_bind_double(stmt, 12, carbs ?? 0)
+            
+            sqlite3_bind_int(stmt, 13, Int32(recipeId))
+            
+            if sqlite3_step(stmt) != SQLITE_DONE {
+                throw NSError(domain: "DatabaseManager",
+                             code: 6,
+                             userInfo: [NSLocalizedDescriptionKey: "Ошибка обновления рецепта: \(lastError())"])
+            }
+            
+            print("✅ Рецепт \(recipeId) обновлен: \(title)")
+            
+            let deleteSQL = "DELETE FROM recipe_ingredients WHERE recipe_id = ?;"
+            var deleteStmt: OpaquePointer?
+            defer { sqlite3_finalize(deleteStmt) }
+            
+            if sqlite3_prepare_v2(db, deleteSQL, -1, &deleteStmt, nil) == SQLITE_OK {
+                sqlite3_bind_int(deleteStmt, 1, Int32(recipeId))
+                sqlite3_step(deleteStmt)
+            }
+            
+            try addIngredients(recipeId: recipeId, ingredientsLines: ingredientsLines)
         }
-        
-        // Биндим параметры
-        sqlite3_bind_text(stmt, 1, title, -1, nil)
-        sqlite3_bind_int(stmt, 2, Int32(categoryId))
-        
-        if let cuisineId {
-            sqlite3_bind_int(stmt, 3, Int32(cuisineId))
-        } else {
-            sqlite3_bind_null(stmt, 3)
-        }
-        
-        sqlite3_bind_text(stmt, 4, difficulty, -1, nil)
-        sqlite3_bind_int(stmt, 5, Int32(timeMinutes))
-        
-        let timeText = "\(timeMinutes) мин"
-        sqlite3_bind_text(stmt, 6, timeText, -1, nil)
-        
-        if let servingsText {
-            sqlite3_bind_text(stmt, 7, servingsText, -1, nil)
-        } else {
-            sqlite3_bind_null(stmt, 7)
-        }
-        
-        sqlite3_bind_text(stmt, 8, instructions, -1, nil)
-        
-        sqlite3_bind_double(stmt, 9, calories ?? 0)
-        sqlite3_bind_double(stmt, 10, protein ?? 0)
-        sqlite3_bind_double(stmt, 11, fat ?? 0)
-        sqlite3_bind_double(stmt, 12, carbs ?? 0)
-        
-        sqlite3_bind_int(stmt, 13, Int32(recipeId))
-        
-        if sqlite3_step(stmt) != SQLITE_DONE {
-            throw NSError(domain: "DatabaseManager",
-                         code: 6,
-                         userInfo: [NSLocalizedDescriptionKey: "Ошибка обновления рецепта: \(lastError())"])
-        }
-        
-        print("✅ Рецепт \(recipeId) обновлен: \(title)")
-        
-        // Удаляем старые ингредиенты
-        let deleteSQL = "DELETE FROM recipe_ingredients WHERE recipe_id = ?;"
-        var deleteStmt: OpaquePointer?
-        defer { sqlite3_finalize(deleteStmt) }
-        
-        if sqlite3_prepare_v2(db, deleteSQL, -1, &deleteStmt, nil) == SQLITE_OK {
-            sqlite3_bind_int(deleteStmt, 1, Int32(recipeId))
-            sqlite3_step(deleteStmt)
-        }
-        
-        // Добавляем новые ингредиенты
-        try addIngredients(recipeId: recipeId, ingredientsLines: ingredientsLines)
     }
 
     // MARK: - Fetch Recipe for Editing
@@ -808,7 +1035,6 @@ final class DatabaseManager {
         let detail = try fetchRecipeDetail(recipeId: recipeId)
         let ingredients = try fetchIngredients(recipeId: recipeId)
         
-        // Получаем cuisine_id для редактирования
         let sql = "SELECT cuisine_id FROM recipes WHERE id = ?;"
         let cuisineId = try runQuery(sql, parameters: [recipeId]) { row in
             row[0] as? Int
@@ -816,12 +1042,10 @@ final class DatabaseManager {
         
         return (detail, cuisineId, ingredients)
     }
+    
     // MARK: - Favorites Methods
     
     func toggleFavorite(recipeId: Int) throws -> Bool {
-        try open()
-        
-        // Проверяем текущий статус
         let checkSQL = "SELECT is_favorite FROM user_recipe_data WHERE recipe_id = ?;"
         let current: [Bool] = try runQuery(checkSQL, parameters: [recipeId]) { row in
             (row[0] as? Int ?? 0) != 0
@@ -829,30 +1053,31 @@ final class DatabaseManager {
         
         let newValue = !(current.first ?? false)
         
-        // Вставляем или обновляем
         let sql = """
         INSERT INTO user_recipe_data (recipe_id, is_favorite, cooked_count)
         VALUES (?, ?, 0)
         ON CONFLICT(recipe_id) DO UPDATE SET is_favorite = ?;
         """
         
-        var stmt: OpaquePointer?
-        defer { sqlite3_finalize(stmt) }
-        
-        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
-            throw NSError(domain: "DatabaseManager",
-                         code: 7,
-                         userInfo: [NSLocalizedDescriptionKey: lastError()])
-        }
-        
-        sqlite3_bind_int(stmt, 1, Int32(recipeId))
-        sqlite3_bind_int(stmt, 2, newValue ? 1 : 0)
-        sqlite3_bind_int(stmt, 3, newValue ? 1 : 0)
-        
-        if sqlite3_step(stmt) != SQLITE_DONE {
-            throw NSError(domain: "DatabaseManager",
-                         code: 8,
-                         userInfo: [NSLocalizedDescriptionKey: lastError()])
+        try dbQueue.sync {
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
+                throw NSError(domain: "DatabaseManager",
+                             code: 7,
+                             userInfo: [NSLocalizedDescriptionKey: lastError()])
+            }
+            
+            sqlite3_bind_int(stmt, 1, Int32(recipeId))
+            sqlite3_bind_int(stmt, 2, newValue ? 1 : 0)
+            sqlite3_bind_int(stmt, 3, newValue ? 1 : 0)
+            
+            if sqlite3_step(stmt) != SQLITE_DONE {
+                throw NSError(domain: "DatabaseManager",
+                             code: 8,
+                             userInfo: [NSLocalizedDescriptionKey: lastError()])
+            }
         }
         
         print("\(newValue ? "✅ Добавлено в избранное" : "❌ Удалено из избранного") рецепт \(recipeId)")
@@ -860,8 +1085,6 @@ final class DatabaseManager {
     }
 
     func getUserRecipeData(recipeId: Int) throws -> (isFavorite: Bool, cookedCount: Int) {
-        try open()
-        
         let sql = """
         SELECT is_favorite, cooked_count
         FROM user_recipe_data
@@ -878,26 +1101,27 @@ final class DatabaseManager {
         if let row = rows.first {
             return row
         } else {
-            // Создаем запись по умолчанию
             let insertSQL = """
             INSERT INTO user_recipe_data (recipe_id, is_favorite, cooked_count)
             VALUES (?, 0, 0);
             """
             
-            var stmt: OpaquePointer?
-            defer { sqlite3_finalize(stmt) }
-            
-            if sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) != SQLITE_OK {
-                throw NSError(domain: "DatabaseManager",
-                             code: 5,
-                             userInfo: [NSLocalizedDescriptionKey: lastError()])
-            }
-            sqlite3_bind_int(stmt, 1, Int32(recipeId))
-            
-            if sqlite3_step(stmt) != SQLITE_DONE {
-                throw NSError(domain: "DatabaseManager",
-                             code: 6,
-                             userInfo: [NSLocalizedDescriptionKey: lastError()])
+            try dbQueue.sync {
+                var stmt: OpaquePointer?
+                defer { sqlite3_finalize(stmt) }
+                
+                if sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) != SQLITE_OK {
+                    throw NSError(domain: "DatabaseManager",
+                                 code: 5,
+                                 userInfo: [NSLocalizedDescriptionKey: lastError()])
+                }
+                sqlite3_bind_int(stmt, 1, Int32(recipeId))
+                
+                if sqlite3_step(stmt) != SQLITE_DONE {
+                    throw NSError(domain: "DatabaseManager",
+                                 code: 6,
+                                 userInfo: [NSLocalizedDescriptionKey: lastError()])
+                }
             }
             return (false, 0)
         }
@@ -935,7 +1159,6 @@ final class DatabaseManager {
     func debugLastAddedItems() throws {
         print("\n=== ПОСЛЕДНИЕ ДОБАВЛЕННЫЕ ЭЛЕМЕНТЫ ===")
         
-        // Последние 3 категории
         let categoriesSQL = """
         SELECT id, name, sort_order 
         FROM categories 
@@ -951,7 +1174,6 @@ final class DatabaseManager {
         print("Последние категории:")
         categories.forEach { print($0) }
         
-        // Последние 3 кухни
         let cuisinesSQL = """
         SELECT id, name 
         FROM cuisines 
@@ -966,7 +1188,6 @@ final class DatabaseManager {
         print("Последние кухни:")
         cuisines.forEach { print($0) }
         
-        // Последние 3 рецепта с ингредиентами
         let recipesSQL = """
         SELECT r.id, r.title, COUNT(ri.id) as ing_count
         FROM recipes r
@@ -1035,34 +1256,31 @@ final class DatabaseManager {
     // MARK: - Delete Methods
     
     func deleteRecipe(id: Int) throws {
-        try open()
-        
         let sql = "UPDATE recipes SET is_archived = 1 WHERE id = ?;"
         
-        var stmt: OpaquePointer?
-        defer { sqlite3_finalize(stmt) }
-        
-        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
-            throw NSError(domain: "DatabaseManager",
-                         code: 501,
-                         userInfo: [NSLocalizedDescriptionKey: lastError()])
-        }
-        
-        sqlite3_bind_int(stmt, 1, Int32(id))
-        
-        if sqlite3_step(stmt) != SQLITE_DONE {
-            throw NSError(domain: "DatabaseManager",
-                         code: 502,
-                         userInfo: [NSLocalizedDescriptionKey: lastError()])
+        try dbQueue.sync {
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
+                throw NSError(domain: "DatabaseManager",
+                             code: 501,
+                             userInfo: [NSLocalizedDescriptionKey: lastError()])
+            }
+            
+            sqlite3_bind_int(stmt, 1, Int32(id))
+            
+            if sqlite3_step(stmt) != SQLITE_DONE {
+                throw NSError(domain: "DatabaseManager",
+                             code: 502,
+                             userInfo: [NSLocalizedDescriptionKey: lastError()])
+            }
         }
         
         print("✅ Рецепт \(id) архивирован")
     }
 
     func deleteCategory(id: Int) throws {
-        try open()
-        
-        // Проверяем, есть ли рецепты в этой категории
         let checkSQL = "SELECT COUNT(*) FROM recipes WHERE category_id = ? AND is_archived = 0;"
         let count = try runQuery(checkSQL, parameters: [id]) { row in
             row[0] as? Int ?? 0
@@ -1074,33 +1292,31 @@ final class DatabaseManager {
                          userInfo: [NSLocalizedDescriptionKey: "Нельзя удалить категорию, в которой есть рецепты"])
         }
         
-        // Удаляем категорию
         let sql = "DELETE FROM categories WHERE id = ?;"
         
-        var stmt: OpaquePointer?
-        defer { sqlite3_finalize(stmt) }
-        
-        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
-            throw NSError(domain: "DatabaseManager",
-                         code: 504,
-                         userInfo: [NSLocalizedDescriptionKey: lastError()])
-        }
-        
-        sqlite3_bind_int(stmt, 1, Int32(id))
-        
-        if sqlite3_step(stmt) != SQLITE_DONE {
-            throw NSError(domain: "DatabaseManager",
-                         code: 505,
-                         userInfo: [NSLocalizedDescriptionKey: lastError()])
+        try dbQueue.sync {
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
+                throw NSError(domain: "DatabaseManager",
+                             code: 504,
+                             userInfo: [NSLocalizedDescriptionKey: lastError()])
+            }
+            
+            sqlite3_bind_int(stmt, 1, Int32(id))
+            
+            if sqlite3_step(stmt) != SQLITE_DONE {
+                throw NSError(domain: "DatabaseManager",
+                             code: 505,
+                             userInfo: [NSLocalizedDescriptionKey: lastError()])
+            }
         }
         
         print("✅ Категория \(id) удалена")
     }
 
     func deleteCuisine(id: Int) throws {
-        try open()
-        
-        // Проверяем, есть ли рецепты с этой кухней
         let checkSQL = "SELECT COUNT(*) FROM recipes WHERE cuisine_id = ? AND is_archived = 0;"
         let count = try runQuery(checkSQL, parameters: [id]) { row in
             row[0] as? Int ?? 0
@@ -1112,27 +1328,59 @@ final class DatabaseManager {
                          userInfo: [NSLocalizedDescriptionKey: "Нельзя удалить кухню, которая используется в рецептах"])
         }
         
-        // Удаляем кухню
         let sql = "DELETE FROM cuisines WHERE id = ?;"
         
-        var stmt: OpaquePointer?
-        defer { sqlite3_finalize(stmt) }
-        
-        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
-            throw NSError(domain: "DatabaseManager",
-                         code: 507,
-                         userInfo: [NSLocalizedDescriptionKey: lastError()])
-        }
-        
-        sqlite3_bind_int(stmt, 1, Int32(id))
-        
-        if sqlite3_step(stmt) != SQLITE_DONE {
-            throw NSError(domain: "DatabaseManager",
-                         code: 508,
-                         userInfo: [NSLocalizedDescriptionKey: lastError()])
+        try dbQueue.sync {
+            var stmt: OpaquePointer?
+            defer { sqlite3_finalize(stmt) }
+            
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK {
+                throw NSError(domain: "DatabaseManager",
+                             code: 507,
+                             userInfo: [NSLocalizedDescriptionKey: lastError()])
+            }
+            
+            sqlite3_bind_int(stmt, 1, Int32(id))
+            
+            if sqlite3_step(stmt) != SQLITE_DONE {
+                throw NSError(domain: "DatabaseManager",
+                             code: 508,
+                             userInfo: [NSLocalizedDescriptionKey: lastError()])
+            }
         }
         
         print("✅ Кухня \(id) удалена")
+    }
+    
+    // MARK: - Direct Database Check
+    func debugPrintShoppingListDirectly() {
+        do {
+            try open()
+            
+            let sql = "SELECT id, name, amount_text, is_checked FROM shopping_list;"
+            var stmt: OpaquePointer?
+            
+            print("\n=== ПРЯМАЯ ПРОВЕРКА БАЗЫ ===")
+            
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    let id = sqlite3_column_int(stmt, 0)
+                    let name = String(cString: sqlite3_column_text(stmt, 1))
+                    let amount = sqlite3_column_text(stmt, 2) != nil ? String(cString: sqlite3_column_text(stmt, 2)) : "nil"
+                    let checked = sqlite3_column_int(stmt, 3)
+                    
+                    print("   🔍 [\(id)] name: '\(name)', amount: '\(amount)', checked: \(checked)")
+                }
+            } else {
+                print("❌ Ошибка запроса")
+            }
+            
+            sqlite3_finalize(stmt)
+            print("===========================\n")
+            
+        } catch {
+            print("❌ Ошибка:", error)
+        }
     }
 }
 
@@ -1163,5 +1411,3 @@ struct SQLiteRow {
         }
     }
 }
-
-

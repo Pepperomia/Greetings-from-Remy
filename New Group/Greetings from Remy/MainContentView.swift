@@ -30,25 +30,29 @@ struct MainContentView: View {
     
     private var mainContent: some View {
         TabView(selection: $selectedTab) {
-
+            
+            // 1. Каталог
             CategoriesView()
                 .tabItem {
                     Label("Каталог", systemImage: "book.closed")
                 }
                 .tag(0)
-
-            SearchView()
+            
+            // 2. Список покупок (ПРОМЕЖУТОЧНЫЙ ЭКРАН)
+            ShoppingListView()  // 👈 ВАЖНО: именно здесь!
                 .tabItem {
-                    Label("Поиск", systemImage: "magnifyingglass")
+                    Label("Список", systemImage: "cart")  // Меняем "Корзина" на "Список"
                 }
-                .tag(1)
-
+                .tag(1)  // 👈 Добавляем tag 1
+            
+            // 3. Добавить рецепт
             AddRecipeView()
                 .tabItem {
                     Label("Добавить", systemImage: "plus.circle")
                 }
                 .tag(2)
-
+            
+            // 4. Избранное
             FavoritesView()
                 .tabItem {
                     Label("Избранное", systemImage: "heart")
