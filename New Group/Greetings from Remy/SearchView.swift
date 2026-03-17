@@ -83,6 +83,9 @@ struct SearchView: View {
             .onTapGesture {
                 isSearchFocused = false
             }
+            .onAppear {
+                loadInitialData()
+            }
         }
         .onChange(of: filter30) { _, _ in
             applyFilters()
@@ -310,9 +313,13 @@ struct SearchView: View {
             let fetched = try DatabaseManager.shared.fetchAllCuisines()
             DispatchQueue.main.async {
                 self.cuisines = fetched
+                print("✅ Загружено кухонь: \(fetched.count)") // Для отладки
+                for cuisine in fetched {
+                    print("   - \(cuisine.name)")
+                }
             }
         } catch {
-            print("Ошибка загрузки кухонь: \(error)")
+            print("❌ Ошибка загрузки кухонь: \(error)")
         }
     }
     
